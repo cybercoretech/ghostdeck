@@ -1,10 +1,14 @@
 name: Android
 on:
   push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -26,6 +30,10 @@ jobs:
         run: |
           bash tools/tests/test-privacy-gate.sh
           bash tools/tests/test-charter-sync.sh
+          bash tools/tests/test-extraction-rules.sh
+          bash tools/tests/test-workflow.sh
+          bash tools/tests/test-sync-themes.sh
+          bash tools/tests/test-docs.sh
       - name: Build, test, lint
         run: ./gradlew assembleDebug testDebugUnitTest lint assembleRelease
       - name: Privacy gate (APKs)

@@ -11,7 +11,7 @@ packs=(
   terminal-ghost/terminal-ghost-alpha
   cryo-terminal-blue/cryo-terminal-blue-synthetic
 )
-mkdir -p "$dest"
+# Validate every pack first so a bad one never leaves the destination half-synced.
 for p in "${packs[@]}"; do
   f="$src/$p.json"
   [[ -f "$f" ]] || { echo "missing: $f" >&2; exit 1; }
@@ -19,6 +19,9 @@ for p in "${packs[@]}"; do
     jq -e --arg r "$r" 'has($r) and (.[$r] | type == "string" and test("^[0-9a-fA-F]{6}$"))' "$f" >/dev/null \
       || { echo "$f: missing or invalid role '$r'" >&2; exit 1; }
   done
-  cp "$f" "$dest/$(basename "$p").json"
+done
+mkdir -p "$dest"
+for p in "${packs[@]}"; do
+  cp "$src/$p.json" "$dest/$(basename "$p").json"
   echo "synced $(basename "$p").json"
 done

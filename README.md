@@ -2,7 +2,7 @@
 
 **A privacy-first Android launcher that rearranges itself for where you are, works as a power tool, and never phones home.**
 
-> 🚧 **Status: M1 (home core) working.** Ghostdeck runs as a real home screen: paged grid with half-cell placement, dock, folders, edit mode, icon packs, opt-in badges, theme packs, Work profile and Private Space apps, onboarding and settings. Decks, search, widgets and the Command Bar come in later milestones, and there's no release APK yet.
+> 🚧 **Status: M1 (home core) working.** Ghostdeck runs as a real home screen: paged grid with half-cell placement, dock, folders, edit mode, theme packs, onboarding, settings and opt-in badges, all run on an emulator. Icon packs and Private Space (and Work profile apps): implemented, unverified on a physical device. Decks, search, widgets and the Command Bar come in later milestones, and there's no release APK yet.
 
 | Home | Edit mode |
 |---|---|
