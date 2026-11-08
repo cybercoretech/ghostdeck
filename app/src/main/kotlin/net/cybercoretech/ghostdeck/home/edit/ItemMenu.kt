@@ -29,6 +29,8 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -96,7 +98,7 @@ fun ItemMenu(
             } else {
                 Column(Modifier.padding(vertical = 12.dp)) {
                     Text(
-                        title, Modifier.padding(horizontal = 16.dp, vertical = 8.dp).testTag("item-menu-title"),
+                        title, Modifier.padding(horizontal = 16.dp, vertical = 8.dp).semantics { heading() }.testTag("item-menu-title"),
                         color = tokens.text, fontFamily = GhostdeckFonts.display, fontWeight = FontWeight.SemiBold, fontSize = 18.sp,
                     )
                     if (item is AppItem) shortcuts.take(MAX_SHORTCUTS).forEach { shortcut ->

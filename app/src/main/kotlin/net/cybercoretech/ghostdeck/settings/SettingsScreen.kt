@@ -42,6 +42,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import net.cybercoretech.ghostdeck.R
@@ -101,6 +102,7 @@ fun SettingsScreen(
                 GhostButton("Back", { if (page == PAGE_MAIN) onClose() else page = PAGE_MAIN }, tag = "settings-back")
                 Text(
                     when (page) { PAGE_ABOUT -> "About & Privacy"; PAGE_LABS -> "Labs"; else -> "Settings" },
+                    Modifier.semantics { heading() }.testTag("settings-title"),
                     color = tokens.text, fontFamily = GhostdeckFonts.display, fontSize = 22.sp,
                 )
             }
@@ -194,7 +196,7 @@ private fun MainPage(
 @Composable
 private fun AboutPage(versionName: String, onVersionTap: () -> Unit) {
     val tokens = LocalTokens.current
-    Text(stringResource(R.string.charter_title), color = tokens.accent, fontFamily = GhostdeckFonts.display, fontSize = 20.sp)
+    Text(stringResource(R.string.charter_title), Modifier.semantics { heading() }, color = tokens.accent, fontFamily = GhostdeckFonts.display, fontSize = 20.sp)
     stringArrayResource(R.array.charter_lines).forEachIndexed { i, line ->
         Row(Modifier.padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("${i + 1}", color = tokens.accentAlt, fontFamily = GhostdeckFonts.mono, fontSize = 14.sp)
@@ -215,7 +217,7 @@ private fun AboutPage(versionName: String, onVersionTap: () -> Unit) {
 @Composable
 private fun SectionTitle(text: String) {
     Text(
-        text.uppercase(), Modifier.padding(top = 20.dp, bottom = 4.dp),
+        text.uppercase(), Modifier.padding(top = 20.dp, bottom = 4.dp).semantics { heading() }.testTag("section-${text.lowercase()}"),
         color = LocalTokens.current.accentAlt, fontFamily = GhostdeckFonts.mono, fontSize = 12.sp,
     )
 }

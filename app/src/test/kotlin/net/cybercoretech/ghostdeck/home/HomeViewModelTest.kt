@@ -103,6 +103,17 @@ class HomeViewModelTest {
         assertEquals(vm.state.value.layout, saved())
     }
 
+    @Test fun resizeDockMovesOverflowToGrid() {
+        val items = listOf(phone, maps, AppKey("com.c", "com.c.Main", 0)).mapIndexed { i, k -> AppItem("d$i", k) }
+        seed(Layout(dock = Dock(items)))
+        val vm = vm()
+        vm.resizeDock(1)
+        val layout = vm.state.value.layout
+        assertEquals(1, layout.dock.items.size)
+        assertEquals(listOf("d1", "d2"), layout.pages.flatMap { p -> p.placed.map { it.item.id } })
+        assertEquals(layout, saved())
+    }
+
     @Test fun corruptConfigSurfacesLoadIssue() {
         store.file.parentFile!!.mkdirs()
         store.file.writeText("{ not json")

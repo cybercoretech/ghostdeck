@@ -5,7 +5,9 @@ import android.os.Build
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
@@ -188,5 +190,33 @@ class SettingsScreenTest {
         assertEquals(false, prefs.swipeMarks)
         rule.onNodeWithTag("setting-fine-grid").assertIsOn()
         rule.onNodeWithTag("setting-swipe-marks").assertIsOff()
+    }
+
+    @Test fun sectionTitlesAreHeadings() {
+        show()
+        listOf("section-theme", "section-home", "section-icons").forEach {
+            rule.onNodeWithTag(it).performScrollTo().assert(SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading))
+        }
+        rule.onNodeWithTag("settings-title").assert(SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading))
+    }
+
+    @Test fun aboutTappedSevenTimesRevealsLabsRow() {
+        show()
+        rule.onAllNodesWithTag("labs-row").assertCountEquals(0)
+        click("about-privacy")
+        repeat(7) { rule.onNodeWithTag("about-version").performScrollTo().performClick() }
+        assertTrue(prefs.labsUnlocked)
+        rule.onNodeWithTag("settings-back").performClick()
+        rule.onNodeWithTag("labs-row").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test fun lockLabsHidesRowAndClearsGridOverlay() {
+        prefs = prefs.copy(labsUnlocked = true, debugGridBounds = true)
+        show()
+        click("labs-row")
+        click("labs-lock")
+        assertEquals(false, prefs.labsUnlocked)
+        assertEquals(false, prefs.debugGridBounds)
+        rule.onAllNodesWithTag("labs-row").assertCountEquals(0)
     }
 }
