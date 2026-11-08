@@ -9,6 +9,8 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import org.junit.Assert.assertEquals
+import net.cybercoretech.ghostdeck.testutil.RobolectricMotion
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
@@ -20,6 +22,8 @@ import org.robolectric.annotation.Config
 @Config(sdk = [35])
 class HomeIntentTest {
     private val ctx: Context = ApplicationProvider.getApplicationContext()
+
+    @Before fun animationsOff() = RobolectricMotion.disableAnimations(ctx)
 
     private fun homeIntent() = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
 

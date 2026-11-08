@@ -84,4 +84,14 @@ class MotionTest {
         rule.waitForIdle()
         assertTrue(seen.last())
     }
+
+    @Test fun orbsAnimateWhenAnimationsOn() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val pack = ThemeRepository(context).load(DEFAULT_PACK_ID)
+        rule.mainClock.autoAdvance = false // the infinite drift would otherwise keep the test from idling
+        rule.setContent { GhostdeckTheme(pack) { AmbientOrbs() } }
+        rule.mainClock.advanceTimeBy(1_000)
+        assertFalse(orbsStatic(AndroidMotionPolicy(context)))
+        rule.mainClock.advanceTimeBy(ORB_DRIFT_MS / 2L)
+    }
 }
