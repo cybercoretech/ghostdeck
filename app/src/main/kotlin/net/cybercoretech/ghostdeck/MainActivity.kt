@@ -1,33 +1,26 @@
 package net.cybercoretech.ghostdeck
 
 import android.content.Intent
+import android.graphics.Color
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.Text
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.padding
+import androidx.activity.enableEdgeToEdge
+import androidx.activity.viewModels
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import net.cybercoretech.ghostdeck.ui.theme.AmbientOrbs
-import net.cybercoretech.ghostdeck.ui.theme.DEFAULT_PACK_ID
-import net.cybercoretech.ghostdeck.ui.theme.GhostdeckFonts
-import net.cybercoretech.ghostdeck.ui.theme.GhostdeckTheme
-import net.cybercoretech.ghostdeck.ui.theme.GlassSurface
-import net.cybercoretech.ghostdeck.ui.theme.LocalMotionPolicy
-import net.cybercoretech.ghostdeck.ui.theme.LocalTokens
-import net.cybercoretech.ghostdeck.ui.theme.ThemeRepository
-import net.cybercoretech.ghostdeck.ui.theme.materialize
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
+import net.cybercoretech.ghostdeck.home.HomeScreen
+import net.cybercoretech.ghostdeck.home.HomeViewModel
+import net.cybercoretech.ghostdeck.platform.expandNotificationShade
+import net.cybercoretech.ghostdeck.ui.theme.ThemeRepository
 
 class MainActivity : ComponentActivity() {
     private val _homePresses = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
@@ -35,33 +28,39 @@ class MainActivity : ComponentActivity() {
     /** Emits when Home is pressed while Ghostdeck is already the foreground home screen. */
     val homePresses: SharedFlow<Unit> = _homePresses
 
+    private val container get() = (application as GhostdeckApp).container
+
+    private val viewModel: HomeViewModel by viewModels {
+        object : ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : ViewModel> create(modelClass: Class<T>): T =
+                HomeViewModel(container.store, container.catalog, container.defaults, container.io) as T
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
+        )
         // At the root of a launcher, Back does nothing.
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() = Unit
         })
         setContent {
-            val pack = remember { ThemeRepository(applicationContext).load(DEFAULT_PACK_ID) }
-            GhostdeckTheme(pack) {
-                val tokens = LocalTokens.current
-                Box(Modifier.fillMaxSize().background(tokens.ground)) {
-                    AmbientOrbs(Modifier.fillMaxSize())
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        val policy = LocalMotionPolicy.current
-                        GlassSurface(Modifier.materialize(visible = true, reduceMotion = policy.reduceMotion)) {
-                            Text(
-                                "Ghostdeck",
-                                modifier = Modifier.padding(horizontal = 32.dp, vertical = 20.dp),
-                                color = tokens.text,
-                                fontFamily = GhostdeckFonts.display,
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 28.sp,
-                            )
-                        }
-                    }
-                }
-            }
+            val state by viewModel.state.collectAsStateWithLifecycle()
+            val themes = remember { ThemeRepository(applicationContext) }
+            HomeScreen(
+                state = state,
+                pack = themes.load(state.prefs.themePack),
+                launcher = container.launcher,
+                icons = container.icons,
+                homePresses = homePresses,
+                onPageChanged = viewModel::goToPage,
+                onSwipeUp = {}, // Command Bar arrives in a later milestone
+                onSwipeDown = { expandNotificationShade(this) },
+            )
         }
     }
 
