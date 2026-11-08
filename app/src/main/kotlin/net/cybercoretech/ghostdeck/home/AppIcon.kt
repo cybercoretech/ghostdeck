@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import net.cybercoretech.ghostdeck.badges.BadgeCounts
 import net.cybercoretech.ghostdeck.catalog.AppEntry
 import net.cybercoretech.ghostdeck.home.edit.DropGeometry
 import net.cybercoretech.ghostdeck.icons.IconProvider
@@ -77,6 +78,8 @@ data class TileEnv(
     val apps: Map<AppKey, AppEntry>,
     val unavailableUsers: Set<Long>,
     val swipeMarks: Boolean,
+    /** Notification counts keyed "package/userSerial"; empty unless the user opted in. */
+    val badges: Map<String, Int>,
     val launcher: AppLauncher,
     val icons: IconProvider,
     val openFolder: (FolderItem) -> Unit,
@@ -113,6 +116,7 @@ private fun ItemTileContent(item: Item, env: TileEnv, iconSize: Dp, showLabel: B
             AppIcon(
                 id = item.id, label = label, available = available, showLabel = showLabel, index = index, modifier = modifier,
                 swipeUp = item.swipeUp, showSwipeMark = env.swipeMarks,
+                badge = env.badges.hasCount(item.app.packageName, item.app.userSerial),
                 onTap = { env.launcher.launch(item.app, it) },
                 onSwipeUp = { runAction(item.swipeUp, item, env, it) },
                 icon = { AppImage(item.app, iconSize, env.icons) },
@@ -125,6 +129,7 @@ private fun ItemTileContent(item: Item, env: TileEnv, iconSize: Dp, showLabel: B
                 id = item.id, label = item.label, available = item.userSerial !in env.unavailableUsers,
                 showLabel = showLabel, index = index, modifier = modifier,
                 swipeUp = item.swipeUp, showSwipeMark = env.swipeMarks,
+                badge = env.badges.hasCount(item.packageName, item.userSerial),
                 onTap = { env.launcher.launchShortcut(item, it) },
                 onSwipeUp = { runAction(item.swipeUp, item, env, it) },
                 icon = { AppImage(owner, iconSize, env.icons) },
@@ -133,11 +138,21 @@ private fun ItemTileContent(item: Item, env: TileEnv, iconSize: Dp, showLabel: B
         is FolderItem -> AppIcon(
             id = item.id, label = item.name, available = true, showLabel = showLabel, index = index, modifier = modifier,
             swipeUp = null, showSwipeMark = false,
+            badge = item.children.any {
+                when (it) {
+                    is AppItem -> env.badges.hasCount(it.app.packageName, it.app.userSerial)
+                    is ShortcutItem -> env.badges.hasCount(it.packageName, it.userSerial)
+                    is FolderItem -> false
+                }
+            },
             onTap = { env.openFolder(item) }, onSwipeUp = {},
             icon = { FolderGlyph(item, iconSize, env) },
         )
     }
 }
+
+private fun Map<String, Int>.hasCount(packageName: String, userSerial: Long) =
+    (this[BadgeCounts.key(packageName, userSerial)] ?: 0) > 0
 
 private fun runAction(action: ItemAction?, item: Item, env: TileEnv, bounds: android.graphics.Rect?) {
     when (action) {
@@ -159,6 +174,7 @@ fun AppIcon(
     index: Int,
     swipeUp: ItemAction?,
     showSwipeMark: Boolean,
+    badge: Boolean,
     onTap: (android.graphics.Rect?) -> Unit,
     onSwipeUp: (android.graphics.Rect?) -> Unit,
     modifier: Modifier = Modifier,
@@ -217,6 +233,10 @@ fun AppIcon(
                     textAlign = TextAlign.Center,
                 )
             }
+        }
+        // A dot, never a number: counts would be one more thing competing for attention.
+        if (badge) {
+            Box(Modifier.align(Alignment.TopEnd).padding(top = 4.dp, end = 8.dp).testTag("badge-$id").size(8.dp).background(tokens.accent, CircleShape))
         }
         // Overlaid at the bottom edge so it never competes with the label for height.
         if (swipeUp != null && showSwipeMark) {

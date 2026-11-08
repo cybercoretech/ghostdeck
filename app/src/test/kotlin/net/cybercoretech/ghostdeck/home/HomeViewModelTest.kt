@@ -53,8 +53,10 @@ class HomeViewModelTest {
 
     @After fun tearDown() = Dispatchers.resetMain()
 
+    private val badgeFlow = kotlinx.coroutines.flow.MutableStateFlow<Map<String, Int>>(emptyMap())
+
     private fun vm(defaults: List<AppKey> = listOf(phone)) =
-        HomeViewModel(store, catalog, DefaultAppsResolver { defaults }, dispatcher)
+        HomeViewModel(store, catalog, DefaultAppsResolver { defaults }, dispatcher, badgeFlow)
 
     private fun entry(key: AppKey, profile: ProfileKind = ProfileKind.PERSONAL) = AppEntry(key, key.packageName, profile)
 
@@ -140,5 +142,26 @@ class HomeViewModelTest {
         assertEquals(setOf(phone), vm.state.value.layout.allAppKeys())
         assertEquals(setOf(phone), saved().allAppKeys())
         assertEquals(cell(3, 3), saved().pages[0].placed.single().cell)
+    }
+
+    private fun seedPrefs(badges: Boolean) {
+        store.save(GhostdeckConfig(
+            decks = listOf(Deck("home", "Home", "home", layout = Layout())), activeDeckId = "home",
+            prefs = net.cybercoretech.ghostdeck.model.Prefs(badges = badges),
+        ))
+    }
+
+    @Test fun badgesReachStateWhenPrefOn() {
+        seedPrefs(badges = true)
+        val vm = vm()
+        badgeFlow.value = mapOf("com.phone/0" to 2)
+        assertEquals(mapOf("com.phone/0" to 2), vm.state.value.badges)
+    }
+
+    @Test fun noDotWhenBadgesPrefOff() {
+        seedPrefs(badges = false)
+        val vm = vm()
+        badgeFlow.value = mapOf("com.phone/0" to 2)
+        assertTrue(vm.state.value.badges.isEmpty())
     }
 }

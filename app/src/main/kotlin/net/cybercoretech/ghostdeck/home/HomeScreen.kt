@@ -198,7 +198,7 @@ fun HomeScreen(
         }
 
         val env = TileEnv(
-            apps = state.apps, unavailableUsers = state.unavailableUsers, swipeMarks = state.prefs.swipeMarks,
+            apps = state.apps, unavailableUsers = state.unavailableUsers, swipeMarks = state.prefs.swipeMarks, badges = state.badges,
             launcher = launcher, icons = icons,
             openFolder = { openFolderId = it.id }, showShortcuts = { menu = MenuTarget(it.id) },
             geometry = session.geometry, draggingId = session.dragItem?.id,

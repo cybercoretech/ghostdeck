@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import net.cybercoretech.ghostdeck.badges.BadgeCounts
 import net.cybercoretech.ghostdeck.catalog.AppCatalog
 import net.cybercoretech.ghostdeck.catalog.CatalogEvent
 import net.cybercoretech.ghostdeck.catalog.CatalogState
@@ -28,6 +29,7 @@ class HomeViewModel(
     catalog: AppCatalog,
     private val defaults: DefaultAppsResolver,
     private val io: CoroutineDispatcher,
+    private val badgeCounts: StateFlow<Map<String, Int>> = BadgeCounts.counts,
 ) : ViewModel() {
     private val _state = MutableStateFlow(HomeUiState(Layout(), emptyMap(), emptySet()))
     val state: StateFlow<HomeUiState> = _state
@@ -36,6 +38,10 @@ class HomeViewModel(
     private var catalogState = CatalogState()
 
     init {
+        // Counts reach the UI only while the badges pref is on; publish() re-applies the gate when prefs change.
+        viewModelScope.launch(io) {
+            badgeCounts.collect { counts -> _state.update { it.copy(badges = gated(it.prefs.badges, counts)) } }
+        }
         viewModelScope.launch(io) {
             load()
             catalog.events.collect(::onCatalogEvent)
@@ -61,11 +67,13 @@ class HomeViewModel(
         if (save) runCatching { store.save(next) }.onFailure { problem = listOfNotNull(problem, "Your layout couldn't be saved: ${it.message}").joinToString(" ") }
         _state.update {
             it.copy(
-                layout = next.activeDeck().layout, prefs = next.prefs, loadIssue = problem ?: it.loadIssue,
+                layout = next.activeDeck().layout, prefs = next.prefs, badges = gated(next.prefs.badges, badgeCounts.value), loadIssue = problem ?: it.loadIssue,
                 apps = catalogState.entries, unavailableUsers = catalogState.unavailableUsers,
             )
         }
     }
+
+    private fun gated(on: Boolean, counts: Map<String, Int>) = if (on) counts else emptyMap()
 
     private fun onCatalogEvent(event: CatalogEvent) {
         catalogState = catalogState.reduce(event)

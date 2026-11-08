@@ -64,11 +64,12 @@ class HomeScreenTest {
         apps: Map<AppKey, AppEntry>,
         unavailable: Set<Long> = emptySet(),
         prefs: Prefs = Prefs(),
+        badges: Map<String, Int> = emptyMap(),
     ) {
         val pack = ThemeRepository(ctx).load(prefs.themePack)
         rule.setContent {
             HomeScreen(
-                state = HomeUiState(layout, apps, unavailable, prefs = prefs),
+                state = HomeUiState(layout, apps, unavailable, badges = badges, prefs = prefs),
                 pack = pack,
                 launcher = launcher,
                 icons = FakeIcons(),
@@ -189,5 +190,17 @@ class HomeScreenTest {
         show(layout, apps(a, b), prefs = Prefs(swipeMarks = false))
         rule.onNodeWithText("Alpha").assertIsDisplayed()
         rule.onAllNodesWithTag("swipe-mark-a", useUnmergedTree = true).assertCountEquals(0)
+    }
+
+    @Test fun dotShownWhenCountPositive() {
+        val a = key("a")
+        show(Layout(pages = listOf(Page(listOf(Placed(AppItem("ia", a), cell(2, 3)))))), apps(a), badges = mapOf("com.a/0" to 3))
+        rule.onNodeWithTag("badge-ia", useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test fun noDotWithoutCount() {
+        val a = key("a")
+        show(Layout(pages = listOf(Page(listOf(Placed(AppItem("ia", a), cell(2, 3)))))), apps(a), badges = mapOf("com.a/10" to 3))
+        rule.onAllNodesWithTag("badge-ia", useUnmergedTree = true).assertCountEquals(0)
     }
 }
