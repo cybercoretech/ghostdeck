@@ -29,13 +29,21 @@ class IconPackIconProvider(
     private val packProvider: () -> String?,
     private val accent: () -> Int = { 0xFFFFFFFF.toInt() },
     private val fallbackDrawable: (AppKey) -> Drawable? = { null },
+    private val drawableLoader: (pack: String, name: String) -> Drawable? = { pack, name -> loadPackDrawable(context, pack, name) },
+    private val drawer: (Drawable, size: Int, overscan: Int) -> ImageBitmap = ::drawToBitmap,
 ) : IconProvider {
     private val cache = LruCache<Triple<AppKey, Int, Int>, ImageBitmap>(CACHE_ENTRIES)
     private var activePack: String? = null
     private var mapping: Map<ComponentName, String> = emptyMap()
 
     override fun icon(key: AppKey, sizePx: Int): ImageBitmap {
-        val pack = packProvider() ?: return base.icon(key, sizePx)
+        val pack = packProvider()
+        if (pack == null) {
+            synchronized(cache) { // back to system icons: forget everything from the old pack
+                if (activePack != null) { cache.evictAll(); activePack = null; mapping = emptyMap() }
+            }
+            return base.icon(key, sizePx)
+        }
         val tint = accent()
         val cacheKey = Triple(key, sizePx, tint)
         synchronized(cache) {
@@ -53,32 +61,32 @@ class IconPackIconProvider(
 
     private fun render(pack: String, key: AppKey, size: Int, tint: Int): ImageBitmap {
         val name = synchronized(cache) { mapping[ComponentName(key.packageName, key.className)] }
-        val packed = name?.let { packDrawable(pack, it) }
+        val packed = name?.let { drawableLoader(pack, it) }
         return when {
-            packed != null -> draw(packed, size)
+            packed != null -> drawer(packed, size, 0)
             else -> monochrome(key, size, tint) ?: base.icon(key, size)
         }
     }
-
-    @Suppress("DiscouragedApi") // icon packs are looked up by name by design
-    private fun packDrawable(pack: String, name: String): Drawable? = runCatching {
-        val res = context.packageManager.getResourcesForApplication(pack)
-        val id = res.getIdentifier(name, "drawable", pack)
-        if (id == 0) null else res.getDrawable(id, null)
-    }.getOrNull()
 
     private fun monochrome(key: AppKey, size: Int, tint: Int): ImageBitmap? {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return null
         val mono = (fallbackDrawable(key) as? AdaptiveIconDrawable)?.monochrome?.mutate() ?: return null
         mono.colorFilter = PorterDuffColorFilter(tint, PorterDuff.Mode.SRC_IN)
         // Adaptive layers are 108dp with a 72dp visible window, so overscan by a quarter each side.
-        return draw(mono, size, overscan = size / 4)
+        return drawer(mono, size, size / 4)
     }
+}
 
-    private fun draw(drawable: Drawable, size: Int, overscan: Int = 0): ImageBitmap {
-        val bmp = createBitmap(size, size)
-        drawable.setBounds(-overscan, -overscan, size + overscan, size + overscan)
-        drawable.draw(Canvas(bmp))
-        return bmp.asImageBitmap()
-    }
+@Suppress("DiscouragedApi") // icon packs are looked up by name by design
+private fun loadPackDrawable(context: Context, pack: String, name: String): Drawable? = runCatching {
+    val res = context.packageManager.getResourcesForApplication(pack)
+    val id = res.getIdentifier(name, "drawable", pack)
+    if (id == 0) null else res.getDrawable(id, null)
+}.getOrNull()
+
+private fun drawToBitmap(drawable: Drawable, size: Int, overscan: Int): ImageBitmap {
+    val bmp = createBitmap(size, size)
+    drawable.setBounds(-overscan, -overscan, size + overscan, size + overscan)
+    drawable.draw(Canvas(bmp))
+    return bmp.asImageBitmap()
 }
