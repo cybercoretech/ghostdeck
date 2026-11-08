@@ -56,8 +56,14 @@ class HomeViewModel(
         when (val result = store.load()) {
             is LoadResult.Loaded -> publish(result.config, null)
             LoadResult.Missing -> publish(freshConfig(), null, save = true)
-            is LoadResult.Corrupt -> publish(freshConfig(), "Your layout file couldn't be read, so Ghostdeck started fresh. The old file was kept as ${result.movedTo.name}.", save = true)
+            is LoadResult.Corrupt -> publish(freshConfig(), corruptMessage(result), save = true)
         }
+    }
+
+    private fun corruptMessage(result: LoadResult.Corrupt): String {
+        val kept = result.movedTo?.let { "The old file was kept as ${it.name}." }
+            ?: "The old file couldn't be moved aside (${result.reason})."
+        return "Your layout file couldn't be read, so Ghostdeck started fresh. $kept"
     }
 
     private fun freshConfig(): GhostdeckConfig = GhostdeckConfig(

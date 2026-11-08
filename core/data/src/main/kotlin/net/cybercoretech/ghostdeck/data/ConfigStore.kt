@@ -6,13 +6,17 @@ import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import net.cybercoretech.ghostdeck.model.GhostdeckConfig
 import net.cybercoretech.ghostdeck.model.GhostdeckJson
+import net.cybercoretech.ghostdeck.model.validationError
 
 sealed interface LoadResult {
     data class Loaded(val config: GhostdeckConfig) : LoadResult
     data object Missing : LoadResult
 
-    /** The file was unreadable, invalid, or from a newer schema; it was moved to [movedTo], never deleted. */
-    data class Corrupt(val movedTo: File, val reason: String) : LoadResult
+    /**
+     * The file was unreadable, invalid, or from a newer schema. It was moved to [movedTo], never deleted;
+     * [movedTo] is null when even the move failed (read-only or full storage) and the file is still in place.
+     */
+    data class Corrupt(val movedTo: File?, val reason: String) : LoadResult
 }
 
 /**
@@ -29,15 +33,20 @@ class ConfigStore(private val dir: File, private val clock: () -> Long = System:
         if (!file.exists()) return LoadResult.Missing
         val reason = try {
             val config = GhostdeckJson.decodeFromString(GhostdeckConfig.serializer(), file.readText())
-            if (config.schema == 1) return LoadResult.Loaded(config)
-            "unsupported schema ${config.schema}"
+            if (config.schema != 1) "unsupported schema ${config.schema}"
+            else config.validationError() ?: return LoadResult.Loaded(config)
         } catch (e: Exception) {
             // SerializationException, and IllegalArgumentException from GridSize/Dock validation.
             e.message ?: e.javaClass.simpleName
         }
         val aside = File(dir, "config.corrupt-${clock()}.json")
-        Files.move(file.toPath(), aside.toPath(), StandardCopyOption.REPLACE_EXISTING)
-        return LoadResult.Corrupt(aside, reason)
+        val moved = try {
+            Files.move(file.toPath(), aside.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            aside
+        } catch (_: Exception) {
+            null // still report it: the caller starts fresh and shows the banner either way
+        }
+        return LoadResult.Corrupt(moved, reason)
     }
 
     fun save(config: GhostdeckConfig) {

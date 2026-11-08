@@ -103,6 +103,15 @@ class HomeViewModelTest {
         assertTrue("corrupt file is kept aside", store.file.parentFile!!.listFiles()!!.any { it.name.startsWith("config.corrupt-") })
     }
 
+    @Test fun configWithoutActiveDeckIsReportedNotCrashed() {
+        store.file.parentFile!!.mkdirs()
+        store.file.writeText("""{"schema":1,"decks":[],"activeDeckId":"home"}""")
+        val vm = vm()
+        assertTrue(vm.state.value.loaded)
+        assertTrue(vm.state.value.loadIssue!!.contains("config.corrupt-"))
+        assertEquals(phone, (vm.state.value.layout.dock.items.first() as AppItem).app)
+    }
+
     @Test fun dismissLoadIssueClearsIt() {
         store.file.parentFile!!.mkdirs()
         store.file.writeText("{ not json")
