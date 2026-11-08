@@ -48,6 +48,16 @@ cp "$fx/dex-clean.txt" "$tmp/z/classes.dex"
 cp "$fx/dex-firebase.txt" "$tmp/z/assets/x.dex"
 (cd "$tmp/z" && zip -qr ../nested.apk classes.dex assets/x.dex)
 
+# Nested jars: a tracker class inside assets/tracker.jar must be found; a clean jar must not trip it.
+mkdir -p "$tmp/j/com/google/firebase/analytics" "$tmp/j/com/example" "$tmp/jz/assets" "$tmp/jc/assets"
+echo x > "$tmp/j/com/google/firebase/analytics/FirebaseAnalytics.class"
+echo x > "$tmp/j/com/example/Fine.class"
+cp "$fx/dex-clean.txt" "$tmp/jz/classes.dex"; cp "$fx/dex-clean.txt" "$tmp/jc/classes.dex"
+(cd "$tmp/j" && zip -qr "$tmp/jz/assets/tracker.jar" com/google)
+(cd "$tmp/j" && zip -qr "$tmp/jc/assets/fine.jar" com/example)
+(cd "$tmp/jz" && zip -qr ../jar-tracker.apk classes.dex assets/tracker.jar)
+(cd "$tmp/jc" && zip -qr ../jar-clean.apk classes.dex assets/fine.jar)
+
 expect_apk() {
     local want="$1" sdk="$2" apk="$3"
     ANDROID_HOME="$sdk" bash "$gate" apk "$apk" >/dev/null 2>&1
@@ -58,6 +68,8 @@ expect_apk() {
 expect_apk 2 "$tmp/sdk"    "$tmp/clean.apk"
 expect_apk 0 "$tmp/sdk-ok" "$tmp/clean.apk"
 expect_apk 1 "$tmp/sdk-ok" "$tmp/nested.apk"
+expect_apk 1 "$tmp/sdk-ok" "$tmp/jar-tracker.apk"   # nested-jar-detected
+expect_apk 0 "$tmp/sdk-ok" "$tmp/jar-clean.apk"
 
 expect 2 bogus
 expect 2
