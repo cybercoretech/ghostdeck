@@ -21,6 +21,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -290,7 +291,9 @@ fun AppIcon(
 @Composable
 fun AppImage(key: AppKey, size: Dp, icons: IconProvider) {
     val px = with(LocalDensity.current) { size.roundToPx() }
-    val bitmap by produceState<ImageBitmap?>(null, key, px) {
+    // A new generation (package updated, profile unlocked) re-requests; the old bitmap stays until the new one lands.
+    val generation by icons.generation.collectAsState()
+    val bitmap by produceState<ImageBitmap?>(null, key, px, generation) {
         value = withContext(Dispatchers.Default) { icons.icon(key, px) }
     }
     Box(Modifier.size(size)) {

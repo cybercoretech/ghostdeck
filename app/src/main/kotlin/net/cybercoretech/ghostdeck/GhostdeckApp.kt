@@ -15,6 +15,7 @@ import net.cybercoretech.ghostdeck.icons.AndroidIconProvider
 import net.cybercoretech.ghostdeck.icons.IconPackIconProvider
 import net.cybercoretech.ghostdeck.icons.IconPackRepository
 import net.cybercoretech.ghostdeck.icons.IconProvider
+import net.cybercoretech.ghostdeck.icons.invalidateFor
 import net.cybercoretech.ghostdeck.platform.AndroidAppCatalog
 import net.cybercoretech.ghostdeck.platform.AndroidAppLauncher
 import net.cybercoretech.ghostdeck.platform.AndroidDefaultApps
@@ -25,9 +26,6 @@ import net.cybercoretech.ghostdeck.platform.DefaultAppsResolver
 class AppContainer(app: Application) {
     val io = Executors.newSingleThreadExecutor { Thread(it, "ghostdeck-io") }.asCoroutineDispatcher()
     val store = ConfigStore(File(app.filesDir, "config"))
-    val catalog: AppCatalog = AndroidAppCatalog(app).let {
-        if (app.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) LoggingCatalog(it) else it
-    }
     val launcher: AppLauncher = AndroidAppLauncher(app)
     /** Selected icon pack and accent colour, pushed in from the UI state (see MainActivity). */
     @Volatile var iconPack: String? = null
@@ -38,11 +36,22 @@ class AppContainer(app: Application) {
         base = baseIcons, repo = iconPacks, context = app,
         packProvider = { iconPack }, accent = { accentArgb }, fallbackDrawable = baseIcons::drawable,
     )
+    /** Every catalog event first evicts the icons it makes stale, before the view model sees it. */
+    val catalog: AppCatalog = IconInvalidatingCatalog(
+        AndroidAppCatalog(app).let {
+            if (app.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) LoggingCatalog(it) else it
+        },
+        icons,
+    )
     val defaults: DefaultAppsResolver = AndroidDefaultApps(app)
 }
 
 class GhostdeckApp : Application() {
     val container: AppContainer by lazy { AppContainer(this) }
+}
+
+private class IconInvalidatingCatalog(private val inner: AppCatalog, private val icons: IconProvider) : AppCatalog by inner {
+    override val events: Flow<CatalogEvent> = inner.events.onEach(icons::invalidateFor)
 }
 
 /** Debug builds only: one log line per catalog event under tag Ghostdeck. */

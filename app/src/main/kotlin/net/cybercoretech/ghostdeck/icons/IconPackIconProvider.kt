@@ -12,6 +12,7 @@ import android.util.LruCache
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.graphics.createBitmap
+import kotlinx.coroutines.flow.StateFlow
 import net.cybercoretech.ghostdeck.model.AppKey
 
 private const val CACHE_ENTRIES = 300
@@ -36,6 +37,18 @@ class IconPackIconProvider(
     private var activePack: String? = null
     private var mapping: Map<ComponentName, String> = emptyMap()
 
+    /** Every invalidation goes through [base] too, so its generation covers both caches. */
+    override val generation: StateFlow<Int> get() = base.generation
+
+    override fun invalidate(userSerial: Long, packageName: String?) {
+        synchronized(cache) {
+            cache.snapshot().keys
+                .filter { (k, _, _) -> k.userSerial == userSerial && (packageName == null || k.packageName == packageName) }
+                .forEach { cache.remove(it) }
+        }
+        base.invalidate(userSerial, packageName)
+    }
+
     override fun icon(key: AppKey, sizePx: Int): ImageBitmap {
         val pack = packProvider()
         if (pack == null) {
@@ -54,18 +67,16 @@ class IconPackIconProvider(
             }
             cache.get(cacheKey)?.let { return it }
         }
-        val bitmap = render(pack, key, sizePx, tint)
+        // Only icons this class drew are cached here; base icons are cached (or not, for placeholders) by base.
+        val bitmap = render(pack, key, sizePx, tint) ?: return base.icon(key, sizePx)
         synchronized(cache) { if (pack == activePack) cache.put(cacheKey, bitmap) }
         return bitmap
     }
 
-    private fun render(pack: String, key: AppKey, size: Int, tint: Int): ImageBitmap {
+    private fun render(pack: String, key: AppKey, size: Int, tint: Int): ImageBitmap? {
         val name = synchronized(cache) { mapping[ComponentName(key.packageName, key.className)] }
         val packed = name?.let { drawableLoader(pack, it) }
-        return when {
-            packed != null -> drawer(packed, size, 0)
-            else -> monochrome(key, size, tint) ?: base.icon(key, size)
-        }
+        return if (packed != null) drawer(packed, size, 0) else monochrome(key, size, tint)
     }
 
     private fun monochrome(key: AppKey, size: Int, tint: Int): ImageBitmap? {

@@ -98,4 +98,27 @@ class IconPackIconProviderTest {
         assertEquals(2, loaded.size)
         assertEquals(2, repo.loads)
     }
+
+    @Test fun invalidateEvictsPackIconAndReachesBase() {
+        val evicted = mutableListOf<Pair<Long, String?>>()
+        val trackingBase = object : IconProvider {
+            override fun icon(key: AppKey, sizePx: Int): ImageBitmap = Bmp(1)
+            override fun invalidate(userSerial: Long, packageName: String?) { evicted += userSerial to packageName }
+        }
+        val p = IconPackIconProvider(
+            trackingBase, repo, context, packProvider = { pack },
+            drawableLoader = { pk, n -> loaded += pk to n; ColorDrawable(0) as Drawable },
+            drawer = { _, _, _ -> Bmp(loaded.size + 100) },
+        )
+        p.icon(key, 48)
+        p.invalidate(0, "com.a")
+        p.icon(key, 48)
+        assertEquals("re-rendered after invalidation", 2, loaded.size)
+        assertEquals(listOf(0L to "com.a"), evicted)
+    }
+
+    @Test fun baseFallbackIsNotCachedByPack() {
+        provider.icon(other, 48); provider.icon(other, 48)
+        assertEquals("base owns its own caching, including not caching placeholders", 2, base.calls)
+    }
 }
