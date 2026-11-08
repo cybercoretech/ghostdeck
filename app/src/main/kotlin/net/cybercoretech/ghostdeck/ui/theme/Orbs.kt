@@ -13,12 +13,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.SemanticsPropertyKey
+import androidx.compose.ui.semantics.SemanticsPropertyReceiver
+import androidx.compose.ui.semantics.semantics
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 
 /** One full drift cycle. The brief asks for 12 s or more. */
 const val ORB_DRIFT_MS = 16_000
+
+/** The drift phase (0..1) the orbs are at; 0 while still. Exposed through semantics for tests. */
+internal val OrbPhaseKey = SemanticsPropertyKey<Float>("OrbPhase")
+private var SemanticsPropertyReceiver.orbPhase by OrbPhaseKey
 
 /** Two soft radial colour orbs (accent, accentAlt) behind the home content. Still when motion is off. */
 @Composable
@@ -32,7 +39,8 @@ fun AmbientOrbs(modifier: Modifier = Modifier) {
         animationSpec = infiniteRepeatable(tween(ORB_DRIFT_MS, easing = LinearEasing), RepeatMode.Restart),
         label = "orbPhase",
     )
-    Canvas(modifier) {
+    // Reading the State in the semantics block (on demand) leaves composition untouched and lets tests observe the drift.
+    Canvas(modifier.semantics { orbPhase = phase?.value ?: 0f }) {
         val angle = ((phase?.value ?: 0f) * 2 * PI).toFloat()
         val radius = size.maxDimension * 0.6f
         fun orb(color: Color, center: Offset) = drawCircle(

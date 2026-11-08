@@ -3,7 +3,10 @@ package net.cybercoretech.ghostdeck.ui.theme
 import android.content.Context
 import android.os.Build
 import androidx.annotation.RequiresApi
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import net.cybercoretech.ghostdeck.theme.ThemePack
@@ -19,7 +22,14 @@ private val bundledAssets = listOf(
     "cryo-terminal-blue-synthetic" to "Cryo Terminal Blue",
 )
 
-class ThemeRepository(private val context: Context) {
+@Suppress("NewApi") // only called for the System pack, which is offered on API 31+
+private val systemDynamicScheme: (Context) -> ColorScheme = { dynamicDarkColorScheme(it) }
+
+/** [dynamicScheme] is where the System pack's colours come from; tests swap it to change them at run time. */
+class ThemeRepository(
+    private val context: Context,
+    private val dynamicScheme: (Context) -> ColorScheme = systemDynamicScheme,
+) {
     private val cache: List<ThemePack> by lazy {
         bundledAssets.map { (id, name) ->
             val json = context.assets.open("themes/$id.json").bufferedReader().use { it.readText() }
@@ -41,7 +51,7 @@ class ThemeRepository(private val context: Context) {
 
     @RequiresApi(Build.VERSION_CODES.S)
     private fun systemPack(): ThemePack {
-        val s = dynamicDarkColorScheme(context)
+        val s = dynamicScheme(context)
         fun hex(c: Color) = "%06x".format(c.toArgb() and 0xFFFFFF)
         val fixed = cache.first { it.id == DEFAULT_PACK_ID }.roles
         return ThemePack(
@@ -57,3 +67,11 @@ class ThemeRepository(private val context: Context) {
         )
     }
 }
+
+/**
+ * The pack for [id]. [systemColorsVersion] is bumped whenever the system colours change, so the dynamic
+ * System pack is rebuilt from the new scheme instead of staying remembered by id.
+ */
+@Composable
+fun rememberThemePack(themes: ThemeRepository, id: String, systemColorsVersion: Int): ThemePack =
+    remember(themes, id, systemColorsVersion) { themes.load(id) }

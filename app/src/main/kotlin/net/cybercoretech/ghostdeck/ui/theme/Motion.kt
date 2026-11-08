@@ -31,12 +31,13 @@ class AndroidMotionPolicy(private val context: Context) : MotionPolicy {
         get() = context.getSystemService(PowerManager::class.java)?.isPowerSaveMode == true
 }
 
-val LocalMotionPolicy = compositionLocalOf<MotionPolicy> {
-    object : MotionPolicy {
-        override val reduceMotion = false
-        override val powerSave = false
-    }
+/** What [LocalMotionPolicy] holds until something provides a live policy; [GhostdeckTheme] then creates one itself. */
+internal object UnprovidedMotionPolicy : MotionPolicy {
+    override val reduceMotion = false
+    override val powerSave = false
 }
+
+val LocalMotionPolicy = compositionLocalOf<MotionPolicy> { UnprovidedMotionPolicy }
 
 /** A [MotionPolicy] backed by snapshot state, so composables that read it recompose when the system setting changes. */
 class LiveMotionPolicy(private val source: MotionPolicy) : MotionPolicy {
