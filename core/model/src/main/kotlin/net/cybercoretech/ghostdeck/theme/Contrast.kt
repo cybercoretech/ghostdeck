@@ -44,4 +44,11 @@ object Contrast {
         }
         return null
     }
+
+    /** Opacity floor for full-screen sheets when cross-window blur is unavailable (API 30, or blur disabled). */
+    private const val NO_BLUR_SHEET_ALPHA = 0.85f
+
+    /** Sheets get a higher-opacity tint when there is no backdrop blur to separate them from the wallpaper. */
+    fun sheetAlpha(glassAlpha: Float, blurAvailable: Boolean): Float =
+        if (blurAvailable) glassAlpha else maxOf(glassAlpha, NO_BLUR_SHEET_ALPHA)
 }

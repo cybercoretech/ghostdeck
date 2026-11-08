@@ -27,4 +27,11 @@ class ContrastTest {
     }
 
     @Test fun glassAlphaNullWhenImpossible() = assertNull(Contrast.glassAlpha(0x777777, 0x808080))
+
+    @Test fun sheetAlphaRaisedWithoutBlur() {
+        assertEquals(0.85f, Contrast.sheetAlpha(0.64f, blurAvailable = false), 0f)
+        assertEquals(0.9f, Contrast.sheetAlpha(0.9f, blurAvailable = false), 0f)
+    }
+
+    @Test fun sheetAlphaUnchangedWithBlur() = assertEquals(0.64f, Contrast.sheetAlpha(0.64f, blurAvailable = true), 0f)
 }

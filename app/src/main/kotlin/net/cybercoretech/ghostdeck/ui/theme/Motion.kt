@@ -1,9 +1,19 @@
 package net.cybercoretech.ghostdeck.ui.theme
 
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.database.ContentObserver
+import android.os.Handler
+import android.os.Looper
 import android.os.PowerManager
 import android.provider.Settings
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
@@ -28,10 +38,45 @@ val LocalMotionPolicy = compositionLocalOf<MotionPolicy> {
     }
 }
 
+/** A [MotionPolicy] backed by snapshot state, so composables that read it recompose when the system setting changes. */
+class LiveMotionPolicy(private val source: MotionPolicy) : MotionPolicy {
+    override var reduceMotion by mutableStateOf(source.reduceMotion)
+        private set
+    override var powerSave by mutableStateOf(source.powerSave)
+        private set
+
+    fun refresh() {
+        reduceMotion = source.reduceMotion
+        powerSave = source.powerSave
+    }
+}
+
+/**
+ * Live policy: refreshes on battery-saver broadcasts and on changes to the animator duration scale,
+ * and unregisters both when it leaves the composition.
+ */
 @Composable
 fun rememberMotionPolicy(): MotionPolicy {
     val context = LocalContext.current
-    return remember(context) { AndroidMotionPolicy(context) }
+    val policy = remember(context) { LiveMotionPolicy(AndroidMotionPolicy(context)) }
+    DisposableEffect(policy) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(c: Context?, intent: Intent?) = policy.refresh()
+        }
+        val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) = policy.refresh()
+        }
+        context.registerReceiver(receiver, IntentFilter(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED))
+        context.contentResolver.registerContentObserver(
+            Settings.Global.getUriFor(Settings.Global.ANIMATOR_DURATION_SCALE), false, observer,
+        )
+        policy.refresh()
+        onDispose {
+            context.unregisterReceiver(receiver)
+            context.contentResolver.unregisterContentObserver(observer)
+        }
+    }
+    return policy
 }
 
 /** The ambient orbs hold still when animations are off or battery saver is on. */

@@ -1,6 +1,12 @@
 package net.cybercoretech.ghostdeck.ui.theme
 
+import android.content.Context
+import android.content.Intent
+import android.os.PowerManager
+import android.provider.Settings
 import androidx.compose.runtime.getValue
+import androidx.test.core.app.ApplicationProvider
+import org.robolectric.Shadows.shadowOf
 import androidx.compose.ui.test.junit4.createComposeRule
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -49,5 +55,33 @@ class MotionTest {
     private fun policy(reduce: Boolean, save: Boolean) = object : MotionPolicy {
         override val reduceMotion = reduce
         override val powerSave = save
+    }
+
+    @Test fun orbsStopWhenPowerSaveTurnsOnWhileShown() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val seen = mutableListOf<Boolean>()
+        rule.setContent {
+            val policy = rememberMotionPolicy()
+            seen += orbsStatic(policy)
+        }
+        assertFalse(seen.last())
+        shadowOf(context.getSystemService(PowerManager::class.java)).setIsPowerSaveMode(true)
+        context.sendBroadcast(Intent(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED))
+        rule.waitForIdle()
+        assertTrue("orbs static after battery saver turns on", seen.last())
+    }
+
+    @Test fun orbsStopWhenRemoveAnimationsTurnsOnWhileShown() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val seen = mutableListOf<Boolean>()
+        rule.setContent {
+            val policy = rememberMotionPolicy()
+            seen += orbsStatic(policy)
+        }
+        assertFalse(seen.last())
+        Settings.Global.putFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 0f)
+        context.contentResolver.notifyChange(Settings.Global.getUriFor(Settings.Global.ANIMATOR_DURATION_SCALE), null)
+        rule.waitForIdle()
+        assertTrue(seen.last())
     }
 }
