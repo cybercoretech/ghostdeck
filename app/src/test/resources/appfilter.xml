@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <iconback img1="back" />
+    <scale factor="0.8" />
+    <item component="ComponentInfo{com.a/com.a.Main}" drawable="a_icon" />
+    <item component="ComponentInfo{com.b/.Short}" drawable="b_icon" />
+    <item component="ComponentInfo{com.nope}" drawable="no_slash" />
+    <item component="ComponentInfo{com.c/com.c.Main}" />
+    <item component="ComponentInfo{com.c/com.c.Other}" drawable="" />
+    <item component=":LAUNCHER_ACTION_APP_DRAWER" drawable="drawer_icon" />
+    <item drawable="no_component" />
+    <item component="ComponentInfo{com.d/com.d.Main}" drawable="d_first" />
+    <item component="ComponentInfo{com.d/com.d.Main}" drawable="d_last" />
+</resources>

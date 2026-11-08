@@ -2,7 +2,24 @@
 
 **A privacy-first Android launcher that rearranges itself for where you are, works as a power tool, and never phones home.**
 
-> 🚧 **Status: M0, privacy rails.** The MVP spec is approved (rev 5) and CI now enforces the charter on every build. The home screen itself arrives in M1. There's no usable APK yet.
+> 🚧 **Status: M1 (home core) working.** Ghostdeck runs as a real home screen: paged grid with half-cell placement, dock, folders, edit mode, theme packs, onboarding, settings and opt-in badges, all run on an emulator. Icon packs and Private Space (and Work profile apps): implemented, unverified on a physical device. Decks, search, widgets and the Command Bar come in later milestones, and there's no release APK yet.
+
+| Home | Edit mode |
+|---|---|
+| <img src="docs/screenshots/home.png" width="240" alt="Ghostdeck home screen with a few apps and the dock"> | <img src="docs/screenshots/edit-mode.png" width="240" alt="Ghostdeck edit mode with the edit bar"> |
+
+## 🔧 Build and install
+
+Needs JDK 17 and the Android SDK (platform 36, build-tools 36.0.0).
+
+```bash
+export ANDROID_HOME=~/android        # your SDK path
+./gradlew installDebug               # installs net.cybercoretech.ghostdeck.debug on the connected device
+```
+
+Then press Home and choose **Ghostdeck**, or accept "Set as home" in the first-run screen. The first run shows the Privacy Charter and asks for no permissions.
+
+Checks: `./gradlew testDebugUnitTest lint assembleRelease`, then `tools/privacy-gate.sh` (see [PRIVACY.md](PRIVACY.md)). The emulator smoke test is `./gradlew connectedDebugAndroidTest` on a device with animations off (`adb shell settings put global animator_duration_scale 0`).
 
 ---
 

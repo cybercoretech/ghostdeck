@@ -1,7 +1,7 @@
 # Ghostdeck MVP: Design Spec
 
 > **Name:** **Ghostdeck** **(owner, 2026-11-07)**. Web check: no Android app or launcher uses the name. An unrelated Windows MSI fan-control tool on GitHub is called "GhostDeck"; it's a different platform and category, so the risk is low.
-> **Date:** 2026-11-07 · **Revision:** 5 (rev 2: intelligent search, universal widgets, power-user layer, privacy charter · rev 3: three-layer architecture, radial menu, Smart Groups, adaptive interface, gesture combos, Activity Center scheduled for v0.2, owner decisions recorded · rev 4: design language (§2b), AI integration in four layers (§8.7), charter line 5 reworded, theme engine moved into M1, Handoff into M3 · rev 5: Nova parity (fine positioning, icon swipe actions, optional classic drawer, left panel, Labs, scheduled export), System tile, textures, Feeds plugin, Link presets and on-phone servers, key storage, theme generator site, corrections from the owner's notes review; see §18) · **Status:** approved by the owner (rev 5, 2026-11-07)
+> **Date:** 2026-11-07 · **Revision:** 6 (rev 2: intelligent search, universal widgets, power-user layer, privacy charter · rev 3: three-layer architecture, radial menu, Smart Groups, adaptive interface, gesture combos, Activity Center scheduled for v0.2, owner decisions recorded · rev 4: design language (§2b), AI integration in four layers (§8.7), charter line 5 reworded, theme engine moved into M1, Handoff into M3 · rev 5: Nova parity (fine positioning, icon swipe actions, optional classic drawer, left panel, Labs, scheduled export), System tile, textures, Feeds plugin, Link presets and on-phone servers, key storage, theme generator site, corrections from the owner's notes review; see §18 · rev 6: Spectral Glass graphics pack (§2b.7)) · **Status:** approved by the owner (rev 6, 2026-11-08)
 >
 > **Design mockups:** https://claude.ai/artifact/Sxh3LxZMM1Q376tq24dWBa (three directions, the interactive blend, the signature motion board)
 > **Owner:** darkstardevx · **Org:** cybercoretech
@@ -105,9 +105,18 @@ Ghostdeck is built as **three layers with one-way dependencies**. Every feature 
 - Scanlines, a soft CRT glow, and a short glitch burst for Terminal Ghost surfaces and Phase shift. All generated on the device: **AGSL `RuntimeShader`** on API 33+, a static drawn overlay (or nothing) below that. No downloaded assets
 - **Never continuous on home.** A texture is either static or plays once (≤ 600 ms, like the other motion). Off on battery saver and reduced motion. Per-pack toggle `textures: on|subtle|off`
 
+### 2b.7 Graphics pack: Spectral Glass (owner, rev 6, 2026-11-08)
+Chosen from five directions on the graphics canvas (https://claude.ai/artifact/8PfCj1es413BXBDbxvw13M, direction B).
+
+- **Launcher icon:** a solid white ghost with indigo eyes (`#4b3fa8`) on a squircle gradient `accent → #5b4bc4 → #2dd4bf` (accent defaults to `#a78bfa`). Adaptive icon: gradient background layer, white ghost foreground inside the 66 dp safe zone, and a **monochrome layer** (the ghost silhouette) for Android's themed icons. Also exported as a 512 px PNG for F-Droid/fastlane and as the site favicon
+- **Spectral tiles (Ghostdeck's built-in icon style):** frosted glass squircle, 1 dp `rgba(255,255,255,.24)` border, a top highlight, and an inner gradient tinted by **purpose**: talk violet `#a78bfa`, look pink `#f472b6`, go teal `#2dd4bf`, tools amber `#f0b35a`. The app's own monochrome icon layer is drawn on top in white. Used for apps an icon pack doesn't cover (replacing the M1 accent-tinted monochrome fallback) and as an opt-in "Spectral" style for every app (Settings → Icons: System / Icon pack / Spectral)
+- **Purpose mapping:** `ApplicationInfo.category` (social, audio, video, image, maps, news, productivity, game) plus the intent lexicon later (§8.5): social/communication → talk; audio/video/image/game → look; maps/browser/travel → go; everything else → tools. Users can override per app (stored with the item). Apps without a monochrome layer fall back to their normal icon on a Spectral tile
+- **UI glyphs:** command, deck, radial, plugin, agent, privacy, why, edit; 24 dp vector drawables, 2 dp round strokes, white on tiles and `accent` elsewhere. Added as their features land
+- **Theme packs** recolour the tile tints from their roles: talk ← `accent_hot`, look ← `hot_pink`, go ← `cyan`, tools ← `orange`. Contrast: the white glyph must meet 3:1 on the tile composited over white and black (same worst-case rule as §2b.3)
+
 ### 2b.5 Where it lands in the milestones
-- **M1:** the theme engine (packs, roles → tokens, the contrast check), Phantom Glass surfaces, Materialize, fonts
-- **M2:** Haunt + Void surfacing
+- **M1:** the theme engine (packs, roles → tokens, the contrast check), Phantom Glass surfaces, Materialize, fonts, **the Spectral Glass launcher icon (§2b.7)**
+- **M2:** Haunt + Void surfacing, **Spectral tiles + purpose mapping (§2b.7)**
 - **M3:** Terminal Ghost Command Bar + Terminal stream + textures (§2b.6)
 - **M4:** Phase shift
 - **M5:** Ghost trail
@@ -652,7 +661,7 @@ Still open: none that blocks planning.
 |---|---|---|
 | M0 | Privacy rails | Repo, CI with the INTERNET/tracker gate, `allowBackup=false`, charter text. **Before any feature work** |
 | M1 | Home core + design base | Can be set as default HOME; grid, dock, folders, edit mode, icon packs, Private Space, **fine positioning (§6.1), icon swipe actions (§6.2), Labs (§10a.7)**; **theme engine with the 4 bundled packs + contrast test, Phantom Glass surfaces, bundled fonts, Materialize (§2b)** |
-| M2 | Universal widgets | `WidgetItem` model, AppWidget hosting, built-in tiles, stacks (manual), unified picker, **Void surfacing + Haunt**, **left panel (§6.4), System tile** |
+| M2 | Universal widgets | `WidgetItem` model, AppWidget hosting, built-in tiles, stacks (manual), unified picker, **Void surfacing + Haunt**, **left panel (§6.4), System tile**, **Spectral tiles (§2b.7)** |
 | M3 | Intelligent Command Bar | §8.2 sources, typo tolerance, intent lexicon, NL actions, context ranking, "Why this?", **Smart Groups + Smart Folders**, **optional classic drawer (§6.3)**, **Terminal Ghost styling + Terminal stream + textures, AI Handoff (`@claude`, `@gpt`, `@gemini`, `@copilot` … to installed apps; §8.7 Layer 0)** |
 | M4 | Context Decks + Adaptive | Decks, triggers, priority, pins, hysteresis, explainer sheet, history, templates, smart stack rotation, **appearance profiles + accessibility/dusk adaptation**, **Phase shift** |
 | M5 | Interaction + Plugins | **Radial menu (marking-menu flicks) with Ghost trail**, remappable gestures, **combos, glyphs, conditional bindings, trigger→action**, aliases/macros, keyboard mode, automation API, AIDL plugin contract, Nightwatch reference plugin PR |

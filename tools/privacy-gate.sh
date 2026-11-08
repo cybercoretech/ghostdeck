@@ -37,6 +37,11 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 root="$(cd "$here/.." && pwd)"
 trackers="${PRIVACY_GATE_TRACKERS:-$here/trackers.txt}"
 
+# Every temp file lives here and is removed on any exit (clean, violation, tool error).
+tmp_dir="$(mktemp -d)"
+trap 'rm -rf "$tmp_dir"' EXIT
+new_tmp() { mktemp -p "$tmp_dir"; }
+
 usage() { sed -n '5,11p' "${BASH_SOURCE[0]}" >&2; exit 2; }
 
 # grep that tells "no match" (1) apart from "grep broke" (2+, e.g. a bad
@@ -48,32 +53,49 @@ safe_grep() {
     return 0
 }
 
+# Read stdin into a temp file (path in $input_file) and exit 2 unless it looks
+# like real tool output: an empty or garbled upstream must never read as clean.
+# $1 = what we expect, $2 = ERE a line must match, or "" for any non-empty line.
+input_file=""
+require_input() {
+    local what="$1" re="$2"
+    input_file="$(new_tmp)"
+    cat > "$input_file"
+    if [[ -z "$re" ]]; then re='.'; fi
+    if ! grep -qE -- "$re" "$input_file"; then
+        echo "privacy-gate: empty or unrecognised input (expected $what); the upstream command probably failed" >&2
+        exit 2
+    fi
+}
+
 violation() { echo "privacy-gate: $1" >&2; shift; printf '  %s\n' "$@" >&2; exit 1; }
 
 check_perms() {
     local hits
-    hits="$(safe_grep -E "android\.permission\.INTERNET'?\b")"
+    require_input "aapt2 output with a 'package:' line" '^package:'
+    hits="$(safe_grep -E "android\.permission\.INTERNET'?\b" < "$input_file")"
     [[ -z "$hits" ]] || violation "INTERNET permission found (the core APK must never have it)" "$hits"
 }
 
 check_dex() {
     local patterns hits
     [[ -r "$trackers" ]] || { echo "privacy-gate: tracker list not found: $trackers" >&2; exit 2; }
-    patterns="$(mktemp)"
+    require_input "dex strings or class names" ''
+    patterns="$(new_tmp)"
     # Each signature is a package or class prefix (com.google.firebase.analytics,
     # com.google.firebase.analytics.FirebaseAnalytics). It becomes a dex
     # descriptor prefix that must end at a name boundary (/ ; or $), so
     # Lcom/adjust does not match Lcom/adjustable.
     grep -vE '^\s*(#|$)' "$trackers" | sed -E 's/\.$//; s/\./\//g; s/^/L/; s/$/(\/|;|\\$)/' > "$patterns"
-    hits="$(safe_grep -E -f "$patterns" | sort -u)" || { rm -f "$patterns"; exit 2; }
-    rm -f "$patterns"
+    hits="$(safe_grep -E -f "$patterns" < "$input_file" | sort -u)" || exit 2
     [[ -z "$hits" ]] || violation "tracker code found in dex ($(wc -l <<<"$hits") classes, first 20 shown)" "$(head -n 20 <<<"$hits")"
 }
 
 check_deps() {
     local re hits
+    require_input "gradle dependencies output with a '---' line" '---'
     re="$(printf '%s|' "${DENIED_GROUPS[@]}" | sed 's/\./\\./g; s/|$//')"
-    hits="$(safe_grep -E "(^|[^A-Za-z0-9_.])($re)(\.[A-Za-z0-9_.-]+)?:" | sort -u)"
+    hits="$(safe_grep -E "(^|[^A-Za-z0-9_.])($re)(\.[A-Za-z0-9_.-]+)?:" < "$input_file" | sort -u)"
     [[ -z "$hits" ]] || violation "tracker or Play Services dependency found" "$hits"
 }
 
@@ -84,13 +106,44 @@ check_mapping() {
     safe_grep -E '^[^ #].* -> .*:$' | sed -E 's/ -> .*//; s/\./\//g; s/^/L/; s/$/;/' | check_dex
 }
 
+# Appends everything scannable inside zip $1 to $scan: strings of every *.dex, and the
+# descriptor (Lcom/x/Y;) of every *.class entry. Nested jar/zip/apk/aar entries are
+# unpacked and scanned the same way (deflated class bytes are unreadable to `strings`,
+# so only entry names and dex are meaningful). $2 = depth.
+scan=""
+scan_zip() {
+    local zip="$1" depth="$2" entry quoted inner
+    local entries
+    entries="$(unzip -Z1 -- "$zip")" || { echo "privacy-gate: cannot list $zip" >&2; exit 2; }
+    while IFS= read -r entry; do
+        [[ -n "$entry" ]] || continue
+        # unzip treats names as wildcard patterns; escape them to match literally.
+        quoted="$(printf '%s' "$entry" | sed 's/[][*?\\]/\\&/g')"
+        case "$entry" in
+            *.dex)
+                unzip -p -- "$zip" "$quoted" | strings -n 6 >> "$scan" || { echo "privacy-gate: cannot read $entry in $zip" >&2; exit 2; } ;;
+            *.class)
+                printf 'L%s;\n' "${entry%.class}" >> "$scan" ;;
+            *.jar|*.zip|*.apk|*.aar)
+                if (( depth >= 4 )); then echo "privacy-gate: archives nested too deeply at $entry in $zip" >&2; exit 2; fi
+                inner="$(new_tmp)"
+                unzip -p -- "$zip" "$quoted" > "$inner" || { echo "privacy-gate: cannot read $entry in $zip" >&2; exit 2; }
+                scan_zip "$inner" $((depth + 1)) ;;
+        esac
+    done <<<"$entries"
+}
+
 check_apk() {
     local apk="${1:-}"
     [[ -f "$apk" ]] || { echo "privacy-gate: no such APK: $apk" >&2; exit 2; }
     local aapt2="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/android}}/build-tools/36.0.0/aapt2"
     [[ -x "$aapt2" ]] || { echo "privacy-gate: aapt2 not found at $aapt2" >&2; exit 2; }
-    "$aapt2" dump permissions "$apk" | check_perms
-    unzip -p "$apk" 'classes*.dex' | strings -n 6 | check_dex
+    local out
+    out="$("$aapt2" dump permissions "$apk")" || { echo "privacy-gate: aapt2 failed on $apk" >&2; exit 2; }
+    check_perms <<<"$out"
+    scan="$(new_tmp)"
+    scan_zip "$apk" 0
+    check_dex < "$scan"
     echo "privacy-gate: $apk is clean (no INTERNET, no tracker code)"
 }
 
