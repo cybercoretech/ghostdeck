@@ -51,7 +51,7 @@ L1 draws, L2 decides (and records why), L3 turns input into one shared set of ac
 
 ## 🛠️ Stack
 
-Kotlin · Jetpack Compose · Material 3 · Room · minSdk 30 / targetSdk 36 · no Google Play Services
+Kotlin · Jetpack Compose · Material 3 · kotlinx-serialization (one JSON config) · minSdk 30 / targetSdk 36 · no Google Play Services
 
 ## 📜 License
 
