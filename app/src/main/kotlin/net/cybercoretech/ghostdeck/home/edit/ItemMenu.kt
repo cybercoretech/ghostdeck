@@ -111,6 +111,9 @@ fun ItemMenu(
 
 private const val MAX_SHORTCUTS = 5
 
+/** Minimum touch target (spec section 13). */
+internal val MIN_TOUCH: Dp = 48.dp
+
 private fun menuTitle(item: Item): String = when (item) {
     is AppItem -> item.customLabel ?: item.app.packageName.substringAfterLast('.').replaceFirstChar(Char::uppercase)
     is ShortcutItem -> item.label
@@ -122,7 +125,7 @@ private fun MenuRow(label: String, tag: String, onClick: () -> Unit, danger: Boo
     val tokens = LocalTokens.current
     Text(
         label,
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp).testTag(tag),
+        Modifier.fillMaxWidth().heightIn(min = MIN_TOUCH).clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp).testTag(tag),
         color = if (danger) tokens.error else tokens.text, fontFamily = GhostdeckFonts.ui, fontSize = 15.sp,
     )
 }
@@ -139,7 +142,7 @@ private fun ShortcutRow(
     var origin by remember { mutableStateOf(Offset.Zero) }
     Text(
         shortcut.label,
-        Modifier.fillMaxWidth()
+        Modifier.fillMaxWidth().heightIn(min = MIN_TOUCH)
             .onGloballyPositioned { origin = it.positionInRoot() }
             .pointerInput(shortcut) {
                 detectDragGestures(

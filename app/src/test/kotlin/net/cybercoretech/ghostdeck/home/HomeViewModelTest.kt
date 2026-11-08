@@ -11,7 +11,11 @@ import net.cybercoretech.ghostdeck.catalog.CatalogEvent
 import net.cybercoretech.ghostdeck.catalog.ProfileKind
 import net.cybercoretech.ghostdeck.data.ConfigStore
 import net.cybercoretech.ghostdeck.data.LoadResult
+import net.cybercoretech.ghostdeck.edit.DragSource
+import net.cybercoretech.ghostdeck.edit.DropZone
+import net.cybercoretech.ghostdeck.edit.EditController
 import net.cybercoretech.ghostdeck.model.AppItem
+import net.cybercoretech.ghostdeck.model.Target
 import net.cybercoretech.ghostdeck.model.AppKey
 import net.cybercoretech.ghostdeck.model.Deck
 import net.cybercoretech.ghostdeck.model.Dock
@@ -116,5 +120,25 @@ class HomeViewModelTest {
         vm.updateLayout { it.copy(pages = it.pages + Page()) }
         assertEquals(2, vm.state.value.layout.pages.size)
         assertEquals(2, saved().pages.size)
+    }
+
+    @Test fun packageRemovedDuringDragIsNotResurrected() {
+        val dragged = AppItem("a", phone)
+        seed(Layout(pages = listOf(Page(listOf(Placed(dragged, cell(0, 0)), Placed(AppItem("b", maps), cell(1, 1)))))))
+        val vm = vm()
+        catalog.flow.tryEmit(CatalogEvent.Snapshot(0, ProfileKind.PERSONAL, listOf(entry(phone), entry(maps))))
+
+        val controller = EditController(vm.state.value.layout)
+        controller.startDrag(DragSource.Existing("a"))
+        assertTrue(controller.hover(DropZone.OnTarget(Target.Grid(0, cell(3, 3)))))
+        val commit = controller.pendingTransform()
+
+        catalog.flow.tryEmit(CatalogEvent.PackageRemoved(0, "com.maps"))
+        controller.drop()
+        vm.updateLayout(commit)
+
+        assertEquals(setOf(phone), vm.state.value.layout.allAppKeys())
+        assertEquals(setOf(phone), saved().allAppKeys())
+        assertEquals(cell(3, 3), saved().pages[0].placed.single().cell)
     }
 }

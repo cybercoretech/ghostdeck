@@ -58,6 +58,7 @@ class EditController(initial: Layout, private val canUninstall: (AppKey) -> Bool
         private set
 
     private var pending: DropOutcome = DropOutcome.Cancelled
+    private var zone: DropZone = DropZone.None
 
     /** Adopts a layout that changed from outside (catalog events, a menu action) and ends any drag. */
     fun resetTo(layout: Layout) {
@@ -67,13 +68,27 @@ class EditController(initial: Layout, private val canUninstall: (AppKey) -> Bool
 
     fun startDrag(source: DragSource) {
         dragging = source
+        zone = DropZone.None
         pending = DropOutcome.Cancelled
     }
 
     /** True when dropping in [zone] right now would change something valid. */
     fun hover(zone: DropZone): Boolean {
-        pending = evaluate(zone)
+        this.zone = zone
+        pending = evaluate(dragging, zone, layout, fine)
         return pending is DropOutcome.Updated || pending is DropOutcome.UninstallRequested
+    }
+
+    /**
+     * The drop as it stands now, as a function of the layout it is committed to. Call before [drop].
+     * The layout can change during a drag (a package is removed), so the commit re-runs the drop against
+     * the current layout; if the dragged item is gone or the spot is no longer valid, nothing changes.
+     */
+    fun pendingTransform(): (Layout) -> Layout {
+        val source = dragging
+        val zone = zone
+        val fine = fine
+        return { current -> (evaluate(source, zone, current, fine) as? DropOutcome.Updated)?.layout ?: current }
     }
 
     fun drop(): DropOutcome {
@@ -85,15 +100,18 @@ class EditController(initial: Layout, private val canUninstall: (AppKey) -> Bool
 
     fun cancel() {
         dragging = null
+        zone = DropZone.None
         pending = DropOutcome.Cancelled
     }
 
     /** Rounds raw half-cell coordinates down to whole cells unless [fine]. */
-    fun snap(rawSubX: Int, rawSubY: Int): Pair<Int, Int> =
+    fun snap(rawSubX: Int, rawSubY: Int): Pair<Int, Int> = snap(rawSubX, rawSubY, fine)
+
+    private fun snap(rawSubX: Int, rawSubY: Int, fine: Boolean): Pair<Int, Int> =
         if (fine) rawSubX to rawSubY else Math.floorDiv(rawSubX, SUB) * SUB to Math.floorDiv(rawSubY, SUB) * SUB
 
-    private fun evaluate(zone: DropZone): DropOutcome {
-        val source = dragging ?: return DropOutcome.Cancelled
+    private fun evaluate(source: DragSource?, zone: DropZone, layout: Layout, fine: Boolean): DropOutcome {
+        source ?: return DropOutcome.Cancelled
         // A new item is staged on a trailing page so every drop reduces to moving an existing item.
         val (base, id, item) = when (source) {
             is DragSource.Existing -> {
@@ -115,7 +133,7 @@ class EditController(initial: Layout, private val canUninstall: (AppKey) -> Bool
             is DropZone.OnTarget -> when (val t = zone.target) {
                 is Target.Grid -> {
                     if (t.page > layout.pages.size) return DropOutcome.Rejected(LayoutError.OutOfBounds)
-                    val (x, y) = snap(t.cell.x, t.cell.y)
+                    val (x, y) = snap(t.cell.x, t.cell.y, fine)
                     base.move(id, t.copy(cell = t.cell.copy(x = x, y = y)))
                 }
                 else -> base.move(id, t)

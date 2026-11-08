@@ -25,6 +25,9 @@ import net.cybercoretech.ghostdeck.model.Page
 import net.cybercoretech.ghostdeck.model.Placed
 import net.cybercoretech.ghostdeck.model.cell
 import net.cybercoretech.ghostdeck.model.findItem
+import net.cybercoretech.ghostdeck.model.removeApp
+import androidx.compose.ui.test.assertHeightIsAtLeast
+import androidx.compose.ui.unit.dp
 import net.cybercoretech.ghostdeck.testutil.RobolectricMotion
 import net.cybercoretech.ghostdeck.ui.theme.ThemeRepository
 import org.junit.Assert.assertEquals
@@ -46,7 +49,7 @@ class EditModeTest {
     private val launcher = FakeLauncher()
     private var editTriggered = 0
     private var done = 0
-    private val changes = mutableListOf<Layout>()
+    private val changes = mutableListOf<(Layout) -> Layout>()
 
     @Before fun animationsOff() = RobolectricMotion.disableAnimations(ctx)
 
@@ -101,7 +104,7 @@ class EditModeTest {
         rule.onNodeWithTag("edit-add-apps").performClick()
         rule.onNodeWithTag("app-picker").assertIsDisplayed()
         rule.onNodeWithTag("picker-row-com.alpha").performClick()
-        val placed = changes.single().pages[0].placed
+        val placed = changes.single()(layout).pages[0].placed
         assertEquals("a picked app lands in the first free whole cell", 3, placed.size)
         assertEquals(cell(2, 0), placed.last().cell)
         rule.onAllNodesWithTag("app-picker").assertCountEquals(0)
@@ -114,7 +117,7 @@ class EditModeTest {
         rule.onNodeWithTag("menu-app-info").assertIsDisplayed()
         assertTrue("the long press did not also tap", launcher.launched.isEmpty())
         rule.onNodeWithTag("menu-remove").performClick()
-        assertNull(changes.single().findItem("a"))
+        assertNull(changes.single()(layout).findItem("a"))
         rule.onAllNodesWithTag("item-menu").assertCountEquals(0)
     }
 
@@ -122,7 +125,7 @@ class EditModeTest {
         show()
         longPressAndDrag("item-a", null)
         rule.onNodeWithTag("menu-hide").performClick()
-        val next = changes.single()
+        val next = changes.single()(layout)
         assertNull(next.findItem("a"))
         assertEquals(setOf(key("alpha")), next.hidden)
     }
@@ -130,10 +133,10 @@ class EditModeTest {
     @Test fun dragIconToEmptyCellMovesIt() {
         show(editing = true)
         longPressAndDrag("item-a", Offset(0f, 200f))
-        val moved = changes.single().pages[0].placed.single { it.item.id == "a" }.cell
+        val moved = changes.single()(layout).pages[0].placed.single { it.item.id == "a" }.cell
         assertEquals("same column, further down", 0, moved.x)
         assertTrue("moved down from row 0 (was ${moved.y})", moved.y > 0)
-        assertNotNull(changes.single().findItem("b"))
+        assertNotNull(changes.single()(layout).findItem("b"))
     }
 
     @Test fun dragToRemoveTargetRemovesItem() {
@@ -141,6 +144,33 @@ class EditModeTest {
         val target = rule.onNodeWithTag("drop-remove").fetchSemanticsNode().boundsInRoot
         val item = rule.onNodeWithTag("item-a").fetchSemanticsNode().boundsInRoot
         longPressAndDrag("item-a", target.center - item.center)
-        assertNull(changes.single().findItem("a"))
+        assertNull(changes.single()(layout).findItem("a"))
+    }
+
+    @Test fun hideUsesCurrentLayout() {
+        show()
+        longPressAndDrag("item-a", null)
+        rule.onNodeWithTag("menu-hide").performClick()
+        val withoutBeta = layout.removeApp(key("beta"))
+        val out = changes.single()(withoutBeta)
+        assertNull("beta stays removed", out.findItem("b"))
+        assertNull(out.findItem("a"))
+        assertEquals(setOf(key("alpha")), out.hidden)
+    }
+
+    @Test fun touchTargetsAreAtLeast48dp() {
+        show(editing = true)
+        rule.onNodeWithTag("edit-done").assertHeightIsAtLeast(48.dp)
+        rule.onNodeWithTag("edit-add-apps").assertHeightIsAtLeast(48.dp)
+        rule.onNodeWithTag("edit-add-apps").performClick()
+        rule.onNodeWithTag("picker-row-com.alpha").assertHeightIsAtLeast(48.dp)
+        rule.onNodeWithTag("picker-hide-com.alpha").assertHeightIsAtLeast(48.dp)
+    }
+
+    @Test fun menuRowsAreAtLeast48dp() {
+        show()
+        longPressAndDrag("item-a", null)
+        rule.onNodeWithTag("menu-app-info").assertHeightIsAtLeast(48.dp)
+        rule.onNodeWithTag("menu-remove").assertHeightIsAtLeast(48.dp)
     }
 }

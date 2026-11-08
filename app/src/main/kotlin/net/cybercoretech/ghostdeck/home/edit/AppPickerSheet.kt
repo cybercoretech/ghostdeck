@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -106,7 +107,7 @@ fun AppPickerSheet(
                     },
                 )
                 Row(
-                    Modifier.fillMaxWidth().clickable { showHidden = !showHidden }.testTag("picker-show-hidden"),
+                    Modifier.fillMaxWidth().heightIn(min = MIN_TOUCH).clickable { showHidden = !showHidden }.testTag("picker-show-hidden"),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text("Show hidden", Modifier.weight(1f), color = tokens.text, fontFamily = GhostdeckFonts.ui, fontSize = 14.sp)
@@ -132,7 +133,7 @@ private fun PickerRow(
 ) {
     val tokens = LocalTokens.current
     Row(
-        Modifier.fillMaxWidth().clickable { onPick(entry) }.padding(vertical = 4.dp).testTag("picker-row-${entry.key.packageName}"),
+        Modifier.fillMaxWidth().heightIn(min = MIN_TOUCH).clickable { onPick(entry) }.padding(vertical = 4.dp).testTag("picker-row-${entry.key.packageName}"),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -147,7 +148,7 @@ private fun PickerRow(
                 color = tokens.accentAlt, fontFamily = GhostdeckFonts.mono, fontSize = 11.sp,
             )
         }
-        TextButton(onClick = { onToggleHidden(entry.key) }, Modifier.testTag("picker-hide-${entry.key.packageName}")) {
+        TextButton(onClick = { onToggleHidden(entry.key) }, Modifier.heightIn(min = MIN_TOUCH).testTag("picker-hide-${entry.key.packageName}")) {
             Text(if (isHidden) "Unhide" else "Hide", color = tokens.accent, fontFamily = GhostdeckFonts.ui, fontSize = 13.sp)
         }
     }

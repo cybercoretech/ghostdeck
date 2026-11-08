@@ -63,7 +63,7 @@ class MainActivity : ComponentActivity() {
                 onDismissIssue = viewModel::dismissLoadIssue,
                 onEmptyLongPress = { viewModel.setEditing(true) },
                 onDoneEditing = { viewModel.setEditing(false) },
-                onLayoutChange = { next -> viewModel.updateLayout { next } },
+                onLayoutChange = viewModel::updateLayout,
                 onSwipeUp = {}, // Command Bar arrives in a later milestone
                 onSwipeDown = { expandNotificationShade(this) },
             )

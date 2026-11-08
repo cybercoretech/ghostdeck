@@ -13,6 +13,7 @@ import net.cybercoretech.ghostdeck.model.ShortcutItem
 import net.cybercoretech.ghostdeck.model.Target
 import net.cybercoretech.ghostdeck.model.cell
 import net.cybercoretech.ghostdeck.model.findItem
+import net.cybercoretech.ghostdeck.model.removeApp
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -208,5 +209,32 @@ class EditControllerTest {
         val back = hiddenLayout.setHidden(key("a"), false)
         assertTrue(back.hidden.isEmpty())
         assertNull(back.findItem("a"))
+    }
+
+    @Test fun pendingTransformReappliesTheDropToTheCurrentLayout() {
+        val c = EditController(base)
+        c.startDrag(DragSource.Existing("a"))
+        assertTrue(c.hover(DropZone.OnTarget(Target.Grid(0, cell(3, 2)))))
+        val commit = c.pendingTransform()
+        val current = base.removeApp(key("b"))
+        val out = commit(current)
+        assertNull("b stays removed", out.findItem("b"))
+        assertEquals(cell(3, 2), out.pages[0].placed.single { it.item.id == "a" }.cell)
+    }
+
+    @Test fun pendingTransformLeavesLayoutAloneWhenDraggedItemIsGone() {
+        val c = EditController(base)
+        c.startDrag(DragSource.Existing("a"))
+        c.hover(DropZone.OnTarget(Target.Grid(0, cell(3, 2))))
+        val commit = c.pendingTransform()
+        val current = base.removeApp(key("a"))
+        assertEquals(current, commit(current))
+    }
+
+    @Test fun pendingTransformWithoutValidHoverChangesNothing() {
+        val c = EditController(base)
+        c.startDrag(DragSource.Existing("a"))
+        c.hover(DropZone.OnTarget(Target.Grid(0, cell(1, 0))))
+        assertEquals(base, c.pendingTransform()(base))
     }
 }

@@ -105,7 +105,8 @@ fun HomeScreen(
     /** The one trigger for edit mode (M5 replaces the long-press with the radial menu's "Edit home"). */
     onEmptyLongPress: () -> Unit = {},
     onDoneEditing: () -> Unit = {},
-    onLayoutChange: (Layout) -> Unit = {},
+    /** Edits are transforms applied to the current layout, never snapshots, so concurrent catalog changes survive. */
+    onLayoutChange: ((Layout) -> Layout) -> Unit = {},
 ) {
     GhostdeckTheme(pack) {
         val tokens = LocalTokens.current
@@ -126,7 +127,7 @@ fun HomeScreen(
 
         fun handle(outcome: DropOutcome) {
             when (outcome) {
-                is DropOutcome.Updated -> onLayoutChange(outcome.layout)
+                is DropOutcome.Updated -> onLayoutChange(session.lastCommit)
                 is DropOutcome.UninstallRequested -> launcher.uninstall(outcome.key)
                 is DropOutcome.Rejected, DropOutcome.Cancelled -> Unit
             }
@@ -257,10 +258,14 @@ fun HomeScreen(
                     hidden = state.layout.hidden,
                     icons = icons,
                     onPick = { entry ->
-                        onLayoutChange(state.layout.placeFirstFree(AppItem(ItemIds.new(), entry.key)))
+                        val item = AppItem(ItemIds.new(), entry.key)
+                        onLayoutChange { it.placeFirstFree(item) }
                         showPicker = false
                     },
-                    onToggleHidden = { key -> onLayoutChange(state.layout.setHidden(key, key !in state.layout.hidden)) },
+                    onToggleHidden = { key ->
+                        val hide = key !in state.layout.hidden
+                        onLayoutChange { it.setHidden(key, hide) }
+                    },
                     onDismiss = { showPicker = false },
                 )
             }
@@ -296,7 +301,7 @@ private fun ItemMenuHost(
     session: EditSession,
     dragging: Boolean,
     fineByDefault: Boolean,
-    onLayoutChange: (Layout) -> Unit,
+    onLayoutChange: ((Layout) -> Layout) -> Unit,
     onOutcome: (DropOutcome) -> Unit,
     onClose: () -> Unit,
     onStartEditing: () -> Unit,
@@ -331,9 +336,9 @@ private fun ItemMenuHost(
             onClose()
         },
         onAppInfo = { if (item is AppItem) launcher.appInfo(item.app); onClose() },
-        onRemove = { onLayoutChange(layout.remove(item.id)); onClose() },
-        onHide = { if (item is AppItem) onLayoutChange(layout.setHidden(item.app, true)); onClose() },
-        onSwipeAction = { action -> (layout.setSwipeUp(item.id, action) as? LayoutResult.Ok)?.let { onLayoutChange(it.layout) } },
+        onRemove = { onLayoutChange { it.remove(item.id) }; onClose() },
+        onHide = { if (item is AppItem) onLayoutChange { it.setHidden(item.app, true) }; onClose() },
+        onSwipeAction = { action -> onLayoutChange { (it.setSwipeUp(item.id, action) as? LayoutResult.Ok)?.layout ?: it } },
         onDismiss = onClose,
     )
 }

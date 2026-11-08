@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -97,7 +98,12 @@ class EditSession(layout: Layout, private val canUninstall: (AppKey) -> Boolean)
         valid = controller.hover(zone)
     }
 
+    /** The last finished drop as an edit of whatever layout is current when it is applied. */
+    var lastCommit: (Layout) -> Layout = { it }
+        private set
+
     fun finish(): DropOutcome {
+        lastCommit = controller.pendingTransform()
         val outcome = controller.drop()
         clear()
         return outcome
@@ -141,7 +147,7 @@ fun EditBar(session: EditSession, onAddApps: () -> Unit, onDone: () -> Unit, mod
 @Composable
 private fun BarText(label: String, tag: String, color: Color, onClick: () -> Unit) {
     Text(
-        label, Modifier.clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 12.dp).testTag(tag),
+        label, Modifier.heightIn(min = MIN_TOUCH).clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 12.dp).testTag(tag),
         color = color, fontFamily = GhostdeckFonts.ui, fontSize = 14.sp,
     )
 }
