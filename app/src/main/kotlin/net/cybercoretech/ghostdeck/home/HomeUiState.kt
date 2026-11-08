@@ -15,4 +15,6 @@ data class HomeUiState(
     val badges: Map<String, Int> = emptyMap(),
     val loadIssue: String? = null,
     val prefs: Prefs = Prefs(),
+    /** False until the config has been read, so first-run screens do not flash before the saved prefs arrive. */
+    val loaded: Boolean = false,
 )

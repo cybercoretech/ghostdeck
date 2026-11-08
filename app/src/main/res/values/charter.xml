@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Word for word from spec §11a.1. tools/tests/test-charter-sync.sh keeps it in sync. -->
-<!-- Used by onboarding (plan Task 13); UnusedResources is ignored until then. -->
-<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="UnusedResources">
+<resources>
     <string name="charter_title">Ghostdeck Privacy Charter</string>
     <string-array name="charter_lines">
         <item>No advertisements. Ever, in any build.</item>

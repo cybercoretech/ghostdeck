@@ -29,6 +29,8 @@ data class Prefs(
     val fineGrid: Boolean = false,
     val swipeMarks: Boolean = true,
     val labsUnlocked: Boolean = false,
+    /** Labs: outlines every grid cell on the home screen. */
+    val debugGridBounds: Boolean = false,
 )
 
 @Serializable

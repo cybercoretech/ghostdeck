@@ -11,9 +11,13 @@ class HomeRole(private val activity: ComponentActivity) {
 
     fun isHeld(): Boolean = roleManager.isRoleHeld(RoleManager.ROLE_HOME)
 
-    /** Launches the system role prompt, only when the role is available and not already held. */
-    fun request(launcher: ActivityResultLauncher<Intent>) {
-        if (!roleManager.isRoleAvailable(RoleManager.ROLE_HOME) || isHeld()) return
+    /**
+     * Launches the system role prompt, only when the role is available and not already held.
+     * Returns false when nothing was launched, so the caller knows no result will arrive.
+     */
+    fun request(launcher: ActivityResultLauncher<Intent>): Boolean {
+        if (!roleManager.isRoleAvailable(RoleManager.ROLE_HOME) || isHeld()) return false
         launcher.launch(roleManager.createRequestRoleIntent(RoleManager.ROLE_HOME))
+        return true
     }
 }

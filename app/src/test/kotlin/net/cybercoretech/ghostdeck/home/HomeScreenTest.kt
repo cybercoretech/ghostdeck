@@ -10,6 +10,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -202,5 +204,15 @@ class HomeScreenTest {
         val a = key("a")
         show(Layout(pages = listOf(Page(listOf(Placed(AppItem("ia", a), cell(2, 3)))))), apps(a), badges = mapOf("com.a/10" to 3))
         rule.onAllNodesWithTag("badge-ia", useUnmergedTree = true).assertCountEquals(0)
+    }
+
+    @Test fun badgedIconAnnouncesNotifications() {
+        val a = key("a"); val b = key("b")
+        val layout = Layout(pages = listOf(Page(listOf(Placed(AppItem("ia", a), cell(0, 0)), Placed(AppItem("ib", b), cell(1, 0))))))
+        show(layout, apps(a, b), badges = mapOf("com.a/0" to 3))
+        rule.onNodeWithContentDescription("A, has notifications").assertIsDisplayed()
+        // An icon without a badge keeps announcing just its label.
+        rule.onAllNodesWithContentDescription("B, has notifications").assertCountEquals(0)
+        rule.onNodeWithText("B").assertIsDisplayed()
     }
 }

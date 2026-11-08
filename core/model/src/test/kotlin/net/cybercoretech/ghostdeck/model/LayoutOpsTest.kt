@@ -200,4 +200,27 @@ class LayoutOpsTest {
         assertEquals(setOf(key("a")), c2.activeDeck().layout.allAppKeys())
         assertTrue(c2.decks[0].layout.allAppKeys().isEmpty())
     }
+
+    @Test fun resizeDockMovesOverflowToGrid() {
+        var l = Layout(dock = Dock(List(5) { null }))
+        l = l.copy(dock = Dock(listOf(app("d0"), app("d1"), null, app("d3"), app("d4"))))
+        val shrunk = l.resizeDock(2)
+        assertEquals(2, shrunk.dock.items.size)
+        assertEquals("d0", shrunk.dock.items[0]?.id)
+        assertEquals("d1", shrunk.dock.items[1]?.id)
+        // d3 and d4 did not fit and land on the first free cells, in slot order.
+        assertEquals(Cell(0, 0), cellOf(shrunk, "d3"))
+        assertEquals(Cell(2, 0), cellOf(shrunk, "d4"))
+        // Growing pads with empty slots and keeps every item in its slot.
+        val grown = shrunk.resizeDock(6)
+        assertEquals(6, grown.dock.items.size)
+        assertEquals("d1", grown.dock.items[1]?.id)
+        assertNull(grown.dock.items[5])
+        assertEquals(shrunk.pages, grown.pages)
+    }
+
+    @Test fun resizeDockClampsToSpecRange() {
+        assertEquals(0, Layout().resizeDock(-3).dock.items.size)
+        assertEquals(6, Layout().resizeDock(99).dock.items.size)
+    }
 }

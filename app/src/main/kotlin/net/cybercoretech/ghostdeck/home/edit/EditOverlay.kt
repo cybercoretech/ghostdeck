@@ -124,7 +124,13 @@ class EditSession(layout: Layout, private val canUninstall: (AppKey) -> Boolean)
 
 /** Top bar of edit mode: the Remove and Uninstall drop targets, "+ Apps" and "Done". */
 @Composable
-fun EditBar(session: EditSession, onAddApps: () -> Unit, onDone: () -> Unit, modifier: Modifier = Modifier) {
+fun EditBar(
+    session: EditSession,
+    onAddApps: () -> Unit,
+    onDone: () -> Unit,
+    modifier: Modifier = Modifier,
+    onSettings: () -> Unit = {},
+) {
     val tokens = LocalTokens.current
     val geometry = session.geometry
     DisposableEffect(geometry) { onDispose { geometry.remove = null; geometry.uninstall = null } }
@@ -139,6 +145,7 @@ fun EditBar(session: EditSession, onAddApps: () -> Unit, onDone: () -> Unit, mod
             enabled = !session.isDragging || session.uninstallable, session.isDragging,
         ) { geometry.uninstall = it }
         Box(Modifier.weight(1f))
+        BarText("Settings", "edit-settings", tokens.muted, onSettings)
         BarText("+ Apps", "edit-add-apps", tokens.accent, onAddApps)
         BarText("Done", "edit-done", tokens.text, onDone)
     }

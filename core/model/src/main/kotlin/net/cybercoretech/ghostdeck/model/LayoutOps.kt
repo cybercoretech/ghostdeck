@@ -197,6 +197,23 @@ fun Layout.resize(newGrid: GridSize): Layout {
     return out
 }
 
+/**
+ * Changes the dock to [slots] slots (clamped to 0..6). Items keep their slot where it still exists; items in
+ * slots beyond the new count go to the first free grid cells, in slot order.
+ */
+fun Layout.resizeDock(slots: Int): Layout {
+    val n = slots.coerceIn(0, 6)
+    val kept = dock.items.take(n)
+    val overflow = dock.items.drop(n).filterNotNull()
+    var out = copy(dock = Dock(kept + List(n - kept.size) { null }))
+    for (item in overflow) {
+        val (page, cell) = out.firstFreeCell()
+        val existing = if (page == out.pages.size) emptyList() else out.pages[page].placed
+        out = out.withPage(page, existing + Placed(item, cell))
+    }
+    return out
+}
+
 fun Layout.setSwipeUp(itemId: String, action: ItemAction?): LayoutResult {
     val item = findItem(itemId) ?: return LayoutResult.Err(LayoutError.UnknownItem)
     if (item !is AppItem && item !is ShortcutItem) return LayoutResult.Err(LayoutError.InvalidTarget)

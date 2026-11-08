@@ -7,6 +7,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.testTag
@@ -24,7 +30,8 @@ fun PageGrid(page: Page, grid: GridSize, env: TileEnv, modifier: Modifier = Modi
     val geometry = env.geometry
     if (geometry != null) DisposableEffect(pageIndex) { onDispose { geometry.grids.remove(pageIndex) } }
     BoxWithConstraints(
-        modifier.fillMaxSize().testTag("page-grid").then(
+        modifier.fillMaxSize().testTag("page-grid")
+            .then(if (env.gridBounds) Modifier.drawBehind { drawCellOutlines(grid) } else Modifier).then(
             if (geometry == null) Modifier else Modifier.onGloballyPositioned { geometry.grids[pageIndex] = it.boundsInRoot() },
         ),
     ) {
@@ -40,5 +47,14 @@ fun PageGrid(page: Page, grid: GridSize, env: TileEnv, modifier: Modifier = Modi
                 modifier = Modifier.offset(subW * c.x, subH * c.y).size(w, h),
             )
         }
+    }
+}
+
+/** Labs debug aid: a hairline rectangle around each whole cell. */
+private fun DrawScope.drawCellOutlines(grid: GridSize) {
+    val w = size.width / grid.cols
+    val h = size.height / grid.rows
+    for (c in 0 until grid.cols) for (r in 0 until grid.rows) {
+        drawRect(Color(0xFFFF4DA6), Offset(c * w, r * h), Size(w, h), style = Stroke(1f))
     }
 }

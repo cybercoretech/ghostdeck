@@ -75,6 +75,25 @@ class HomeViewModelTest {
         assertEquals(vm.state.value.layout, saved())
     }
 
+    @Test fun updatePrefsPersistsAndPublishes() {
+        val vm = vm()
+        assertTrue(vm.state.value.loaded)
+        vm.updatePrefs { it.copy(onboardingDone = true, themePack = "terminal-ghost-alpha") }
+        assertTrue(vm.state.value.prefs.onboardingDone)
+        val reloaded = (store.load() as LoadResult.Loaded).config.prefs
+        assertEquals("terminal-ghost-alpha", reloaded.themePack)
+        assertTrue(reloaded.onboardingDone)
+    }
+
+    @Test fun resizeGridMovesOverflowAndPersists() {
+        seed(Layout(pages = listOf(Page(listOf(Placed(AppItem("a", maps), cell(4, 5)))))))
+        val vm = vm()
+        vm.resizeGrid(net.cybercoretech.ghostdeck.model.GridSize(3, 4))
+        assertEquals(net.cybercoretech.ghostdeck.model.GridSize(3, 4), vm.state.value.layout.grid)
+        assertEquals(setOf(maps), vm.state.value.layout.allAppKeys())
+        assertEquals(vm.state.value.layout, saved())
+    }
+
     @Test fun corruptConfigSurfacesLoadIssue() {
         store.file.parentFile!!.mkdirs()
         store.file.writeText("{ not json")

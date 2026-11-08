@@ -107,6 +107,7 @@ fun HomeScreen(
     onDoneEditing: () -> Unit = {},
     /** Edits are transforms applied to the current layout, never snapshots, so concurrent catalog changes survive. */
     onLayoutChange: ((Layout) -> Layout) -> Unit = {},
+    onOpenSettings: () -> Unit = {},
 ) {
     GhostdeckTheme(pack) {
         val tokens = LocalTokens.current
@@ -198,7 +199,7 @@ fun HomeScreen(
         }
 
         val env = TileEnv(
-            apps = state.apps, unavailableUsers = state.unavailableUsers, swipeMarks = state.prefs.swipeMarks, badges = state.badges,
+            apps = state.apps, unavailableUsers = state.unavailableUsers, swipeMarks = state.prefs.swipeMarks, gridBounds = state.prefs.debugGridBounds, badges = state.badges,
             launcher = launcher, icons = icons,
             openFolder = { openFolderId = it.id }, showShortcuts = { menu = MenuTarget(it.id) },
             geometry = session.geometry, draggingId = session.dragItem?.id,
@@ -220,7 +221,7 @@ fun HomeScreen(
         ) {
             AmbientOrbs(Modifier.fillMaxSize())
             Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars)) {
-                if (state.editing) EditBar(session, onAddApps = { showPicker = true }, onDone = onDoneEditing)
+                if (state.editing) EditBar(session, onAddApps = { showPicker = true }, onDone = onDoneEditing, onSettings = onOpenSettings)
                 HorizontalPager(pagerState, Modifier.weight(1f).fillMaxWidth()) { page ->
                     val shown = state.layout.pages.getOrNull(page) ?: Page().takeIf { page == layoutPageCount }
                     shown?.let { PageGrid(it, state.layout.grid, env, pageIndex = page) }

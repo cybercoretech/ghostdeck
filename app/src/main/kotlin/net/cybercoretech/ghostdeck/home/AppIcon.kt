@@ -38,6 +38,7 @@ import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
@@ -78,6 +79,8 @@ data class TileEnv(
     val apps: Map<AppKey, AppEntry>,
     val unavailableUsers: Set<Long>,
     val swipeMarks: Boolean,
+    /** Labs: outline every grid cell. */
+    val gridBounds: Boolean = false,
     /** Notification counts keyed "package/userSerial"; empty unless the user opted in. */
     val badges: Map<String, Int>,
     val launcher: AppLauncher,
@@ -215,7 +218,11 @@ fun AppIcon(
             .materialize(visible = shown, reduceMotion = reduceMotion)
             .alpha(if (available) 1f else UNAVAILABLE_ALPHA)
             .onGloballyPositioned { c -> c.boundsInWindow().let { bounds = android.graphics.Rect(it.left.toInt(), it.top.toInt(), it.right.toInt(), it.bottom.toInt()) } }
-            .then(if (showLabel) Modifier else Modifier.semantics { contentDescription = label })
+            // TalkBack hears the label, plus "has notifications" when the dot is showing.
+            .then(
+                if (showLabel && !badge) Modifier
+                else Modifier.semantics { contentDescription = if (badge) "$label, has notifications" else label },
+            )
             .clickable(enabled = available) { onTap(bounds) }
             .then(swipeModifier),
     ) {
@@ -224,7 +231,9 @@ fun AppIcon(
             if (showLabel) {
                 Text(
                     label,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp, vertical = 2.dp),
+                    // The tile's own description already carries the label when a badge is showing.
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp, vertical = 2.dp)
+                        .then(if (badge) Modifier.clearAndSetSemantics {} else Modifier),
                     color = tokens.text,
                     fontFamily = GhostdeckFonts.ui,
                     fontSize = 11.sp,

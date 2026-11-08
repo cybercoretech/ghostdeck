@@ -17,7 +17,11 @@ import net.cybercoretech.ghostdeck.data.ConfigStore
 import net.cybercoretech.ghostdeck.data.LoadResult
 import net.cybercoretech.ghostdeck.model.Deck
 import net.cybercoretech.ghostdeck.model.GhostdeckConfig
+import net.cybercoretech.ghostdeck.model.GridSize
 import net.cybercoretech.ghostdeck.model.Layout
+import net.cybercoretech.ghostdeck.model.Prefs
+import net.cybercoretech.ghostdeck.model.resize
+import net.cybercoretech.ghostdeck.model.resizeDock
 import net.cybercoretech.ghostdeck.model.activeDeck
 import net.cybercoretech.ghostdeck.model.defaultLayout
 import net.cybercoretech.ghostdeck.model.updateActiveLayout
@@ -67,7 +71,7 @@ class HomeViewModel(
         if (save) runCatching { store.save(next) }.onFailure { problem = listOfNotNull(problem, "Your layout couldn't be saved: ${it.message}").joinToString(" ") }
         _state.update {
             it.copy(
-                layout = next.activeDeck().layout, prefs = next.prefs, badges = gated(next.prefs.badges, badgeCounts.value), loadIssue = problem ?: it.loadIssue,
+                layout = next.activeDeck().layout, prefs = next.prefs, loaded = true, badges = gated(next.prefs.badges, badgeCounts.value), loadIssue = problem ?: it.loadIssue,
                 apps = catalogState.entries, unavailableUsers = catalogState.unavailableUsers,
             )
         }
@@ -92,6 +96,18 @@ class HomeViewModel(
             publish(current.updateActiveLayout(f), null, save = true)
         }
     }
+
+    fun updatePrefs(f: (Prefs) -> Prefs) {
+        viewModelScope.launch(io) {
+            val current = config ?: return@launch
+            publish(current.copy(prefs = f(current.prefs)), null, save = true)
+        }
+    }
+
+    /** Overflowing items move to the first free cells (see [resize]). */
+    fun resizeGrid(g: GridSize) = updateLayout { it.resize(g) }
+
+    fun resizeDock(slots: Int) = updateLayout { it.resizeDock(slots) }
 
     fun setEditing(on: Boolean) = _state.update { it.copy(editing = on) }
 
