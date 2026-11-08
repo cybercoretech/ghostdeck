@@ -10,6 +10,9 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import org.junit.Assert.assertEquals
 import net.cybercoretech.ghostdeck.testutil.RobolectricMotion
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
+import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -24,6 +27,22 @@ class HomeIntentTest {
     private val ctx: Context = ApplicationProvider.getApplicationContext()
 
     @Before fun animationsOff() = RobolectricMotion.disableAnimations(ctx)
+
+    private val controllers = mutableListOf<org.robolectric.android.controller.ActivityController<MainActivity>>()
+
+    private fun launch() = Robolectric.buildActivity(MainActivity::class.java).setup().also { controllers += it }
+
+    /**
+     * The view model reads the config and the app catalog on the app's own io thread. Let that work finish and
+     * tear the activity down inside the test, so nothing touches the Robolectric environment after it is reset
+     * (that surfaced as UncaughtExceptionsBeforeTest in whichever Compose test ran next).
+     */
+    @After fun tearDown() {
+        val io = (ctx as GhostdeckApp).container.io
+        runBlocking { withContext(io) {} }
+        controllers.forEach { if (!it.get().isDestroyed) it.pause().stop().destroy() }
+        runBlocking { withContext(io) {} }
+    }
 
     private fun homeIntent() = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
 
@@ -41,14 +60,14 @@ class HomeIntentTest {
     }
 
     @Test fun homeIntentWhileResumedEmitsHomePress() {
-        val c = Robolectric.buildActivity(MainActivity::class.java).setup()
+        val c = launch()
         val count = collectPresses(c)
         c.newIntent(homeIntent())
         assertEquals(1, count())
     }
 
     @Test fun homeIntentWhilePausedDoesNotEmit() {
-        val c = Robolectric.buildActivity(MainActivity::class.java).setup()
+        val c = launch()
         val count = collectPresses(c)
         c.pause()
         c.newIntent(homeIntent())
@@ -56,7 +75,7 @@ class HomeIntentTest {
     }
 
     @Test fun nonHomeIntentWhileResumedDoesNotEmit() {
-        val c = Robolectric.buildActivity(MainActivity::class.java).setup()
+        val c = launch()
         val count = collectPresses(c)
         c.newIntent(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER))
         assertEquals(0, count())
