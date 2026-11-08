@@ -11,3 +11,4 @@ local.properties
 *.env
 artifacts/
 .DS_Store
+.superpowers/

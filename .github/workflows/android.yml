@@ -1,0 +1,46 @@
+name: Android
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: platform-tools
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic
+      - name: Install SDK
+        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+      - name: Privacy gate and charter self-tests
+        run: |
+          bash tools/tests/test-privacy-gate.sh
+          bash tools/tests/test-charter-sync.sh
+      - name: Build, test, lint
+        run: ./gradlew assembleDebug testDebugUnitTest lint assembleRelease
+      - name: Privacy gate (APKs)
+        run: |
+          tools/privacy-gate.sh apk app/build/outputs/apk/release/app-release-unsigned.apk
+          tools/privacy-gate.sh apk app/build/outputs/apk/debug/app-debug.apk
+      - name: Privacy gate (original names of minified classes)
+        # R8 renames classes in release, so also scan the names they had before.
+        run: tools/privacy-gate.sh mapping < app/build/outputs/mapping/release/mapping.txt
+      - name: Privacy gate (dependencies)
+        run: |
+          tools/privacy-gate.sh gradle releaseRuntimeClasspath
+          tools/privacy-gate.sh gradle debugRuntimeClasspath
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ghostdeck-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error

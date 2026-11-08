@@ -1,0 +1,4 @@
+# compiler: R8
+androidx.activity.ComponentActivity -> i9:
+    void onCreate(android.os.Bundle) -> onCreate
+net.cybercoretech.ghostdeck.MainActivity -> net.cybercoretech.ghostdeck.MainActivity:

@@ -1,0 +1,4 @@
+# compiler: R8
+androidx.activity.ComponentActivity -> i9:
+com.clevertap.android.sdk.CleverTapAPI -> a.b:
+    void push() -> a
