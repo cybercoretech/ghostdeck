@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Word for word from spec §11a.1. tools/tests/test-charter-sync.sh keeps it in sync. -->
+<!-- Used by onboarding (plan Task 13); UnusedResources is ignored until then. -->
+<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="UnusedResources">
+    <string name="charter_title">Ghostdeck Privacy Charter</string>
+    <string-array name="charter_lines">
+        <item>No advertisements. Ever, in any build.</item>
+        <item>No behavioural tracking. Ghostdeck learns from your use only on your device, for you, and shows you everything it has learned (11a.3).</item>
+        <item>No selling or sharing of data. There is no server to send it to.</item>
+        <item>Local-first. All settings, layouts and learned signals live on the device. Export them yourself if you want them anywhere else.</item>
+        <item>Optional AI, on-device by default. Cloud AI only through the separate Link plugin, with your own keys, and nothing is sent without you seeing exactly what.</item>
+        <item>Transparent permissions. Every permission is requested at the moment it\'s needed, with a plain-language reason, and listed in the Privacy Ledger.</item>
+        <item>No account. Nothing to sign up for, ever.</item>
+    </string-array>
+</resources>

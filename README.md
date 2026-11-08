@@ -2,7 +2,7 @@
 
 **A privacy-first Android launcher that rearranges itself for where you are, works as a power tool, and never phones home.**
 
-> 🚧 **Status: design stage.** The MVP spec is done and approved. Implementation starts with milestone M0 (privacy checks in CI). There's no APK yet.
+> 🚧 **Status: M0, privacy rails.** The MVP spec is approved (rev 5) and CI now enforces the charter on every build. The home screen itself arrives in M1. There's no usable APK yet.
 
 ---
 
@@ -30,7 +30,7 @@
 6. **Transparent permissions.** Every permission is requested at the moment it's needed, with a plain-language reason, and listed in the Privacy Ledger.
 7. **No account.** Nothing to sign up for, ever.
 
-**Enforced, not just promised:** the core APK has **no `INTERNET` permission**, and CI fails the build if one ever appears. Builds are reproducible and published on F-Droid.
+**Enforced, not just promised:** the core APK has **no `INTERNET` permission**, and CI fails the build if one ever appears, or if tracker code or tracker libraries show up. Builds will be reproducible and published on F-Droid. Details and how to check it yourself: [PRIVACY.md](PRIVACY.md).
 
 ## 🎨 Design
 
@@ -48,6 +48,8 @@ L1 draws, L2 decides (and records why), L3 turns input into one shared set of ac
 ## 📐 Design docs
 
 - 📄 [MVP design spec](docs/superpowers/specs/2026-11-07-ghostdeck-mvp-design.md)
+- 🗺️ [M0 + M1 build plan](docs/superpowers/plans/2026-11-07-ghostdeck-m0-m1-foundation.md)
+- 🛡️ [Privacy](PRIVACY.md)
 
 ## 🛠️ Stack
 
