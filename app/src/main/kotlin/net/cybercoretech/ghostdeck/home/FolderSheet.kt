@@ -75,7 +75,7 @@ internal fun rememberSheetAlpha(): Float {
         blurred = applySheetBlur(window, SHEET_BLUR_PX)
         // Battery saver can switch cross-window blur off (and on) while the sheet is open: follow it.
         val listener = Consumer<Boolean> { enabled ->
-            window.setBackgroundBlurRadius(if (enabled) SHEET_BLUR_PX else 0)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) window.setBackgroundBlurRadius(if (enabled) SHEET_BLUR_PX else 0)
             blurred = enabled
         }
         val wm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) context.getSystemService(WindowManager::class.java) else null
