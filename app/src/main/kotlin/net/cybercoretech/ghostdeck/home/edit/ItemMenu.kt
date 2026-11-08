@@ -57,6 +57,8 @@ private val LIST_MAX_HEIGHT: Dp = 360.dp
 @Composable
 fun ItemMenu(
     item: Item,
+    /** The catalog label (or custom label, shortcut label, folder name), never one guessed from the package. */
+    title: String,
     shortcuts: List<AppShortcut>,
     apps: List<AppEntry>,
     dragging: Boolean,
@@ -93,7 +95,7 @@ fun ItemMenu(
             } else {
                 Column(Modifier.padding(vertical = 12.dp)) {
                     Text(
-                        menuTitle(item), Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        title, Modifier.padding(horizontal = 16.dp, vertical = 8.dp).testTag("item-menu-title"),
                         color = tokens.text, fontFamily = GhostdeckFonts.display, fontWeight = FontWeight.SemiBold, fontSize = 18.sp,
                     )
                     if (item is AppItem) shortcuts.take(MAX_SHORTCUTS).forEach { shortcut ->
@@ -113,12 +115,6 @@ private const val MAX_SHORTCUTS = 5
 
 /** Minimum touch target (spec section 13). */
 internal val MIN_TOUCH: Dp = 48.dp
-
-private fun menuTitle(item: Item): String = when (item) {
-    is AppItem -> item.customLabel ?: item.app.packageName.substringAfterLast('.').replaceFirstChar(Char::uppercase)
-    is ShortcutItem -> item.label
-    is FolderItem -> item.name
-}
 
 @Composable
 private fun MenuRow(label: String, tag: String, onClick: () -> Unit, danger: Boolean = false) {

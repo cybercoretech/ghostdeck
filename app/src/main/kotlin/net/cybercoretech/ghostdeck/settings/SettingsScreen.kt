@@ -83,8 +83,9 @@ fun SettingsScreen(
     notificationAccessGranted: Boolean,
     labsUnlock: LabsUnlock,
     onPrefs: ((Prefs) -> Prefs) -> Unit,
-    onGrid: (GridSize) -> Unit,
-    onDockSlots: (Int) -> Unit,
+    /** A transform of the stored grid, so quick steps on both steppers never undo each other. */
+    onGrid: ((GridSize) -> GridSize) -> Unit,
+    onDockSlots: ((Int) -> Int) -> Unit,
     onUnhide: (AppKey) -> Unit,
     onOpenNotificationAccess: () -> Unit,
     onLabsUnlocked: () -> Unit,
@@ -137,8 +138,9 @@ private fun MainPage(
     apps: Map<AppKey, AppEntry>,
     notificationAccessGranted: Boolean,
     onPrefs: ((Prefs) -> Prefs) -> Unit,
-    onGrid: (GridSize) -> Unit,
-    onDockSlots: (Int) -> Unit,
+    /** A transform of the stored grid, so quick steps on both steppers never undo each other. */
+    onGrid: ((GridSize) -> GridSize) -> Unit,
+    onDockSlots: ((Int) -> Int) -> Unit,
     onUnhide: (AppKey) -> Unit,
     onOpenNotificationAccess: () -> Unit,
     onAbout: () -> Unit,
@@ -154,9 +156,9 @@ private fun MainPage(
     ToggleRow("Swipe marks", "Show a small dot under icons that have a swipe-up action.", prefs.swipeMarks, "setting-swipe-marks") {
         onPrefs { p -> p.copy(swipeMarks = it) }
     }
-    StepperRow("Grid columns", layout.grid.cols, COLS, "grid-cols") { onGrid(GridSize(it, layout.grid.rows)) }
-    StepperRow("Grid rows", layout.grid.rows, ROWS, "grid-rows") { onGrid(GridSize(layout.grid.cols, it)) }
-    StepperRow("Dock slots", layout.dock.items.size, DOCK, "dock-slots") { onDockSlots(it) }
+    StepperRow("Grid columns", layout.grid.cols, COLS, "grid-cols") { d -> onGrid { it.copy(cols = (it.cols + d).coerceIn(COLS)) } }
+    StepperRow("Grid rows", layout.grid.rows, ROWS, "grid-rows") { d -> onGrid { it.copy(rows = (it.rows + d).coerceIn(ROWS)) } }
+    StepperRow("Dock slots", layout.dock.items.size, DOCK, "dock-slots") { d -> onDockSlots { (it + d).coerceIn(DOCK) } }
 
     SectionTitle("Icons")
     ChoiceRow("System default", "iconpack-system", selected = prefs.iconPack == null) { onPrefs { it.copy(iconPack = null) } }
@@ -248,16 +250,17 @@ internal fun ToggleRow(title: String, subtitle: String, checked: Boolean, tag: S
 }
 
 @Composable
-private fun StepperRow(title: String, value: Int, range: IntRange, tag: String, onChange: (Int) -> Unit) {
+/** [onStep] gets -1 or +1, applied by the caller to the stored value (never to [value], which may be stale). */
+private fun StepperRow(title: String, value: Int, range: IntRange, tag: String, onStep: (Int) -> Unit) {
     Row(Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp), verticalAlignment = Alignment.CenterVertically) {
         // Label and value are one TalkBack stop: "Grid columns, 5".
         BodyText(title, Modifier.weight(1f).semantics { contentDescription = "$title, $value" })
-        GhostButton("-", { if (value - 1 in range) onChange(value - 1) }, tag = "$tag-dec", contentDescription = "Decrease ${title.lowercase()}")
+        GhostButton("-", { if (value - 1 in range) onStep(-1) }, tag = "$tag-dec", contentDescription = "Decrease ${title.lowercase()}")
         Text(
             "$value", Modifier.testTag("$tag-value").clearAndSetSemantics {},
             color = LocalTokens.current.text, fontFamily = GhostdeckFonts.mono, fontSize = 16.sp,
         )
-        GhostButton("+", { if (value + 1 in range) onChange(value + 1) }, tag = "$tag-inc", contentDescription = "Increase ${title.lowercase()}")
+        GhostButton("+", { if (value + 1 in range) onStep(1) }, tag = "$tag-inc", contentDescription = "Increase ${title.lowercase()}")
     }
 }
 

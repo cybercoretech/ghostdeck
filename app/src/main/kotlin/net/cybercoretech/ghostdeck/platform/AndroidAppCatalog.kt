@@ -106,11 +106,6 @@ class AndroidAppCatalog(context: Context) : AppCatalog {
         // Bursts (boot, storage mount) must not drop PackageRemoved or ProfileAvailability(false).
     }.buffer(Channel.UNLIMITED)
 
-    override fun setProfileLocked(userSerial: Long, locked: Boolean) {
-        val user = userManager.getUserForSerialNumber(userSerial) ?: return
-        userManager.requestQuietModeEnabled(locked, user)
-    }
-
     private fun kindOf(user: UserHandle): ProfileKind {
         if (user == android.os.Process.myUserHandle()) return ProfileKind.PERSONAL
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) return ProfileKind.WORK

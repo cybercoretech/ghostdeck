@@ -6,7 +6,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 
-/** A palette in the org theme registry's 20-role format. Values are 6-digit hex without '#'. */
+/** A palette in the org theme registry's 21-role format. Values are 6-digit hex without '#'. */
 @Serializable
 data class ThemePack(val id: String, val name: String, val roles: Map<String, String>)
 

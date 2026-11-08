@@ -137,6 +137,10 @@ fun TileEnv.stateOf(item: Item): TileState = when (item) {
     is FolderItem -> if (item.children.isNotEmpty() && item.children.all { stateOf(it) == TileState.Hidden }) TileState.Hidden else TileState.Normal
 }
 
+/** The launcher activity a shortcut belongs to (for its icon and shortcut list), or a class-less key if unknown. */
+fun ShortcutItem.ownerKey(apps: Map<AppKey, AppEntry>): AppKey =
+    apps.keys.firstOrNull { it.packageName == packageName && it.userSerial == userSerial } ?: AppKey(packageName, "", userSerial)
+
 /** The children of [folder] that may be drawn right now. */
 fun TileEnv.visibleChildren(folder: FolderItem): List<Item> = folder.children.filter { stateOf(it) != TileState.Hidden }
 
@@ -176,8 +180,7 @@ private fun ItemTileContent(item: Item, env: TileEnv, iconSize: Dp, showLabel: B
             )
         }
         is ShortcutItem -> {
-            val owner = env.apps.keys.firstOrNull { it.packageName == item.packageName && it.userSerial == item.userSerial }
-                ?: AppKey(item.packageName, "", item.userSerial)
+            val owner = item.ownerKey(env.apps)
             AppIcon(
                 id = item.id, label = item.label, available = env.stateOf(item) == TileState.Normal,
                 showLabel = showLabel, index = index, modifier = modifier,
@@ -329,7 +332,7 @@ private fun FolderGlyph(folder: FolderItem, size: Dp, env: TileEnv) {
                     row.forEach { child ->
                         val key = when (child) {
                             is AppItem -> child.app
-                            is ShortcutItem -> AppKey(child.packageName, "", child.userSerial)
+                            is ShortcutItem -> child.ownerKey(env.apps)
                             is FolderItem -> null
                         }
                         if (key != null) AppImage(key, mini, env.icons) else Spacer(Modifier.size(mini))

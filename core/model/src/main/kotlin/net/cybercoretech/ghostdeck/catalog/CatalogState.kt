@@ -16,7 +16,6 @@ sealed interface CatalogEvent {
 /** Source of catalog events; implemented on Android by `AndroidAppCatalog`. */
 interface AppCatalog {
     val events: Flow<CatalogEvent>
-    fun setProfileLocked(userSerial: Long, locked: Boolean)
 }
 
 data class CatalogState(

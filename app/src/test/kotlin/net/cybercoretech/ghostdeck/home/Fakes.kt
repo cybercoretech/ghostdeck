@@ -16,7 +16,6 @@ import net.cybercoretech.ghostdeck.platform.AppLauncher
 class FakeCatalog : AppCatalog {
     val flow = MutableSharedFlow<CatalogEvent>(extraBufferCapacity = 64)
     override val events: Flow<CatalogEvent> = flow
-    override fun setProfileLocked(userSerial: Long, locked: Boolean) = Unit
 }
 
 class FakeLauncher : AppLauncher {

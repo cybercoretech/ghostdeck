@@ -1,6 +1,7 @@
 package net.cybercoretech.ghostdeck.home
 
 import android.app.WallpaperManager
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Box
@@ -187,6 +188,15 @@ fun HomeScreen(
             }
         }
         LaunchedEffect(pagerState) { snapshotFlow { pagerState.settledPage }.collect(onPageChanged) }
+        // Back closes the topmost layer: item menu, picker, folder sheet, then edit mode.
+        BackHandler(enabled = menu != null || showPicker || openFolderId != null || state.editing) {
+            when {
+                menu != null -> menu = null
+                showPicker -> showPicker = false
+                openFolderId != null -> openFolderId = null
+                else -> onDoneEditing()
+            }
+        }
 
         val context = LocalContext.current
         val view = LocalView.current
@@ -319,8 +329,13 @@ private fun ItemMenuHost(
     val layout = state.layout
     val ownerKey = when (item) {
         is AppItem -> item.app
-        is ShortcutItem -> AppKey(item.packageName, "", item.userSerial)
+        is ShortcutItem -> item.ownerKey(state.apps)
         is FolderItem -> null
+    }
+    val title = when (item) {
+        is AppItem -> item.customLabel ?: state.apps[item.app]?.label ?: item.app.packageName.substringAfterLast('.')
+        is ShortcutItem -> item.label
+        is FolderItem -> item.name
     }
     val shortcuts by produceState(emptyList<AppShortcut>(), item.id) {
         value = ownerKey?.let { withContext(Dispatchers.Default) { launcher.shortcuts(it) } }.orEmpty()
@@ -329,7 +344,7 @@ private fun ItemMenuHost(
         CatalogState(state.apps, state.unavailableUsers).visibleApps().filter { it.key !in layout.hidden }
     }
     ItemMenu(
-        item = item, shortcuts = shortcuts, apps = apps, dragging = dragging, startInSwipePicker = false,
+        item = item, title = title, shortcuts = shortcuts, apps = apps, dragging = dragging, startInSwipePicker = false,
         onLaunchShortcut = { s ->
             launcher.launchShortcut(ShortcutItem(ItemIds.new(), s.packageName, s.id, s.userSerial, s.label), null)
             onClose()

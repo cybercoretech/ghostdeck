@@ -113,7 +113,12 @@ class HomeViewModel(
     /** Overflowing items move to the first free cells (see [resize]). */
     fun resizeGrid(g: GridSize) = updateLayout { it.resize(g) }
 
+    /** [f] runs on the stored grid, so steps queued before the last save came back still compose. */
+    fun resizeGrid(f: (GridSize) -> GridSize) = updateLayout { it.resize(f(it.grid)) }
+
     fun resizeDock(slots: Int) = updateLayout { it.resizeDock(slots) }
+
+    fun resizeDock(f: (Int) -> Int) = updateLayout { it.resizeDock(f(it.dock.items.size)) }
 
     fun setEditing(on: Boolean) = _state.update { it.copy(editing = on) }
 

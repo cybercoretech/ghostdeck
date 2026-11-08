@@ -48,6 +48,10 @@ class SettingsScreenTest {
     private val gridRequests = mutableListOf<GridSize>()
     private val dockRequests = mutableListOf<Int>()
     private var accessOpened = 0
+    /** When false, requests are recorded but the layout isn't updated: the save round-trip hasn't come back yet. */
+    private var applyGrid = true
+    /** The grid as the view model's config holds it; transforms apply to this, as HomeViewModel does. */
+    private var storedGrid = GridSize()
     private var iconPacks = listOf(IconPack("org.example.pack", "Example Pack"))
 
     @Before fun setUp() = RobolectricMotion.disableAnimations(ctx)
@@ -66,8 +70,12 @@ class SettingsScreenTest {
                 notificationAccessGranted = access,
                 labsUnlock = LabsUnlock { 0L },
                 onPrefs = { f -> prefs = f(prefs) },
-                onGrid = { gridRequests += it; layout = layout.copy(grid = it) },
-                onDockSlots = { dockRequests += it; layout = layout.copy(dock = net.cybercoretech.ghostdeck.model.Dock(List(it) { null })) },
+                onGrid = { f -> storedGrid = f(storedGrid); gridRequests += storedGrid; if (applyGrid) layout = layout.copy(grid = storedGrid) },
+                onDockSlots = { f ->
+                    val n = f(layout.dock.items.size)
+                    dockRequests += n
+                    layout = layout.copy(dock = net.cybercoretech.ghostdeck.model.Dock(List(n) { null }))
+                },
                 onUnhide = { key -> layout = layout.copy(hidden = layout.hidden - key) },
                 onOpenNotificationAccess = { accessOpened++ },
                 onLabsUnlocked = { prefs = prefs.copy(labsUnlocked = true) },
@@ -89,6 +97,15 @@ class SettingsScreenTest {
         assertEquals(GridSize(8, 10), layout.grid)
         // Steps at the limits are swallowed, so nothing out of range was ever requested.
         assertTrue(gridRequests.all { it.cols in 3..8 && it.rows in 4..10 })
+    }
+
+    @Test fun quickColsThenRowsKeepsBoth() {
+        applyGrid = false
+        show()
+        click("grid-cols-dec")
+        click("grid-rows-dec")
+        // Applied in order to the stored grid, the requests must end at 4 x 5, not reset cols to 5.
+        assertEquals(GridSize(4, 5), gridRequests.last())
     }
 
     @Test fun dockSlotsClampTo0to6() {

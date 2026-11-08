@@ -3,9 +3,13 @@ package net.cybercoretech.ghostdeck.home.edit
 import android.content.Context
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.center
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.activity.ComponentActivity
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithText
+import net.cybercoretech.ghostdeck.model.FolderItem
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
@@ -44,7 +48,7 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 class EditModeTest {
-    @get:Rule val rule = createComposeRule()
+    @get:Rule val rule = createAndroidComposeRule<ComponentActivity>()
     private val ctx: Context = ApplicationProvider.getApplicationContext()
     private val launcher = FakeLauncher()
     private var editTriggered = 0
@@ -57,7 +61,7 @@ class EditModeTest {
     private val layout = Layout(pages = listOf(Page(listOf(Placed(AppItem("a", key("alpha")), cell(0, 0)), Placed(AppItem("b", key("beta")), cell(1, 0))))))
     private val apps = listOf("alpha", "beta").associate { key(it) to AppEntry(key(it), it.replaceFirstChar(Char::uppercase), ProfileKind.PERSONAL) }
 
-    private fun show(editing: Boolean = false) {
+    private fun show(editing: Boolean = false, layout: Layout = this.layout, apps: Map<AppKey, AppEntry> = this.apps) {
         val pack = ThemeRepository(ctx).load("ghostdeck")
         rule.setContent {
             HomeScreen(
@@ -172,5 +176,53 @@ class EditModeTest {
         longPressAndDrag("item-a", null)
         rule.onNodeWithTag("menu-app-info").assertHeightIsAtLeast(48.dp)
         rule.onNodeWithTag("menu-remove").assertHeightIsAtLeast(48.dp)
+    }
+
+    private fun pressBack() {
+        rule.runOnUiThread { rule.activity.onBackPressedDispatcher.onBackPressed() }
+        rule.waitForIdle()
+    }
+
+    @Test fun backLeavesEditMode() {
+        show(editing = true)
+        pressBack()
+        assertEquals(1, done)
+    }
+
+    @Test fun backClosesItemMenu() {
+        show()
+        longPressAndDrag("item-a", null)
+        rule.onNodeWithTag("item-menu").assertIsDisplayed()
+        pressBack()
+        rule.onAllNodesWithTag("item-menu").assertCountEquals(0)
+    }
+
+    @Test fun backClosesAppPickerBeforeLeavingEditMode() {
+        show(editing = true)
+        rule.onNodeWithTag("edit-add-apps").performClick()
+        rule.onNodeWithTag("app-picker").assertIsDisplayed()
+        pressBack()
+        rule.onAllNodesWithTag("app-picker").assertCountEquals(0)
+        assertEquals("the first Back only closed the picker", 0, done)
+    }
+
+    @Test fun backClosesFolderSheet() {
+        val folder = FolderItem("f", "Stuff", listOf(AppItem("fa", key("alpha")), AppItem("fb", key("beta"))))
+        show(layout = Layout(pages = listOf(Page(listOf(Placed(folder, cell(0, 0)))))))
+        rule.onNodeWithText("Stuff").performClick()
+        rule.onNodeWithTag("folder-sheet").assertIsDisplayed()
+        pressBack()
+        rule.onAllNodesWithTag("folder-sheet").assertCountEquals(0)
+    }
+
+    @Test fun menuTitleUsesCatalogLabel() {
+        val gmail = AppKey("com.google.android.gm", "com.google.android.gm.ConversationListActivityGmail", 0)
+        show(
+            layout = Layout(pages = listOf(Page(listOf(Placed(AppItem("g", gmail), cell(0, 0)))))),
+            apps = mapOf(gmail to AppEntry(gmail, "Gmail", ProfileKind.PERSONAL)),
+        )
+        longPressAndDrag("item-g", null)
+        rule.onNodeWithTag("item-menu").assertIsDisplayed()
+        rule.onNodeWithTag("item-menu-title", useUnmergedTree = true).assertTextEquals("Gmail")
     }
 }
