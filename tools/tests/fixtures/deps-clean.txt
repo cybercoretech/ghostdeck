@@ -1,0 +1,4 @@
+releaseRuntimeClasspath - Runtime classpath of '/release'.
++--- androidx.compose:compose-bom:2025.10.00
+|    +--- androidx.compose.material3:material3:1.4.0 (c)
+\--- org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2
