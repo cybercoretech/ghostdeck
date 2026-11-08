@@ -1,7 +1,9 @@
 # Ghostdeck MVP: Design Spec
 
 > **Name:** **Ghostdeck** **(owner, 2026-11-07)**. Web check: no Android app or launcher uses the name. An unrelated Windows MSI fan-control tool on GitHub is called "GhostDeck"; it's a different platform and category, so the risk is low.
-> **Date:** 2026-11-07 · **Revision:** 3 (rev 2: intelligent search, universal widgets, power-user layer, privacy charter · rev 3: three-layer architecture, radial menu, Smart Groups, adaptive interface, gesture combos, Activity Center scheduled for v0.2, owner decisions recorded) · **Status:** approved by the owner (2026-11-07)
+> **Date:** 2026-11-07 · **Revision:** 3 (rev 2: intelligent search, universal widgets, power-user layer, privacy charter · rev 3: three-layer architecture, radial menu, Smart Groups, adaptive interface, gesture combos, Activity Center scheduled for v0.2, owner decisions recorded · rev 4: design language (§2b), AI integration in four layers (§8.7), charter line 5 reworded, theme engine moved into M1, Handoff into M3) · **Status:** approved by the owner (rev 4, 2026-11-07)
+>
+> **Design mockups:** https://claude.ai/artifact/Sxh3LxZMM1Q376tq24dWBa (three directions, the interactive blend, the signature motion board)
 > **Owner:** darkstardevx · **Org:** cybercoretech
 
 The owner said "use your defaults", so every decision below is **Claude's call** unless it's marked **(owner)**. Anything here can be overridden.
@@ -18,17 +20,17 @@ Android launchers have gone stale. Nova was acquired by an ad/analytics company 
 
 ---
 
-## 2. The three pillars of the MVP
+## 2. The pillars of the MVP
 
 | Pillar | What it is | Why it's different |
 |---|---|---|
 | **Context Decks** | Several complete home layouts ("decks") that switch automatically based on rules (time, Wi‑Fi, Bluetooth device, power, headphones), plus manual override | Other launchers suggest apps. This swaps the **whole environment**, and the rules are readable and explained |
 | **Command Bar** | Replaces the app drawer. Type to find apps, shortcuts and contacts, run actions, switch decks, and call plugin verbs | Built in, polished and extensible. Not a gimmicky "terminal launcher" |
 | **Tiles + Plugin API** | Home-screen tiles fed by local data or by **plugin apps** through a small public contract | The launcher stays offline. Network and scripting live in separate opt-in plugins (e.g. Nightwatch can supply a darkbox status tile) |
-
 | **Intelligent Search** | Search that understands what you *mean*: typos, synonyms, intents ("pay" finds wallet apps), context-aware ranking, natural-language actions. All on-device | Other launchers' search is substring matching. This one is a local intent engine |
 | **Universal Widgets** | One item system: Android widgets, Ghostdeck tiles and plugin tiles all sit on the same grid, can be **stacked**, resize the same way, and follow per-deck rules | Widgets become first-class, deck-aware and stackable, not stuck in a separate picker |
 | **Power-User Layer** | Configurable gestures, aliases and macros, a hardware-keyboard mode, an intent/Tasker API, and a config file | Power through **text and files**, not 400 toggles |
+| **Agents (rev 4)** | Claude, ChatGPT, Gemini, Copilot and others from the command bar (`@claude …`), in four opt-in layers: handoff, on-device, your own API keys, and agent bridges (§8.7) | AI that **shows what it sends** (consent chips), **proposes instead of acting** (tap to run), and can even design a deck. The core still never touches the network |
 
 **Underneath everything: the Privacy Charter (§11a).** Privacy is enforced by the architecture, not just promised in marketing. The core APK has **no `INTERNET` permission, and CI fails the build if one ever appears**.
 
@@ -59,6 +61,53 @@ Ghostdeck is built as **three layers with one-way dependencies**. Every feature 
 - **L3 turns input into `Action`s.** One `Action` sealed type (open app, run verb, switch/pin deck, open radial, open sheet, macro, …) is shared by gestures, the radial menu, the command bar, macros, the automation API and plugins. **Anything one input can do, every input can do**
 - Module mapping: `:ui:*` = L1, `:engine:*` = L2, `:interaction:*` = L3 (this refines the module list in §4)
 
+## 2b. Design language (owner-approved, rev 4)
+
+**One sentence:** *glass you can see through, a terminal when you want to work, and nothing on screen that isn't needed right now.* The mockup canvas linked in the header is the visual reference.
+
+### 2b.1 Three styles, each with its own job
+| Style | Where it's used | What it looks like |
+|---|---|---|
+| **Phantom Glass** (the base) | Home, dock, folders, deck chip, sheets, settings | Near-black ground. Frosted translucent surfaces (`blur` 16–24 dp, white at 6–14% fill, a 1 dp hairline border at 12–16%, an inset top highlight). Two soft blurred colour "orbs" behind the wallpaper layer drift slowly. Icons sit on glass tiles with a 20 dp corner radius |
+| **Terminal Ghost** | Command Bar, agent panels, macro editor, "Why this?" sheets, logs | Monospace everywhere. `❯` prompt, small uppercase mono labels (`ATTACHED · TAP TO REMOVE`), results styled like code, text that streams in, a blinking block caret. A near-opaque panel (`~92%`) with an accent hairline |
+| **Void behaviour** | Widgets and tiles | Calm by default: a widget surfaces only when it's relevant (a meeting soon, a WARN from a plugin, headphones connected) and fades when it isn't. Every widget that surfaces shows a one-line reason ("surfaced because a plugin reported WARN"). Stacks (§9.0.1) and smart rotation drive it. The user can pin any widget to "always visible" |
+
+### 2b.2 Type
+- **Display:** Space Grotesk (clock, deck names, headings)
+- **UI text:** Inter
+- **Terminal surfaces:** JetBrains Mono
+- All three are OFL-licensed and **bundled in the APK** (no downloadable fonts, no Google Fonts provider, consistent with §11a)
+- Respects the system font scale up to 200%. The clock scales down before it wraps
+
+### 2b.3 Colour and theme packs
+- A theme pack is a palette using the **org theme registry's 20-role schema** (`bg`, `surface`, `panel`, `border`, `line`, `selection`, `hover`, `white`, `muted`, `text_primary`, `accent_hot`, `accent_alt`, `acid_green`, `hot_pink`, `purple`, `cyan`, `orange`, `red`, `success`, `warning`, `error`). Ghostdeck maps the roles: `bg` → ground, `accent_hot`/`accent_alt` → the two orbs and accents, `success`/`warning`/`error` → tile status
+- **Bundled packs (MVP):** **Ghostdeck** (default: `bg #07060d`, accent `#a78bfa`, alt `#2dd4bf`), **Cybercore Vortex**, **Terminal Ghost** (`terminal-ghost-alpha`), and **Cryo Terminal Blue**, copied from `cybercoretech.github.io/data/themes/**` at build time by a Gradle task and kept in sync by CI. **No network at runtime**
+- **More packs:** import any registry theme JSON through the Storage Access Framework. *(Claude's call: a "fetch the latest packs" option belongs in the Link plugin, never in the core.)*
+- Per-deck accent overrides the pack's accent (§7.1). Material You dynamic colour is still offered as a pack called "System"
+- **Contrast rule:** text on glass must meet **4.5:1** against the darkest point of the orb behind it. If a pack fails, the renderer raises surface opacity automatically. A unit test checks every bundled pack
+
+### 2b.4 Signature motion
+| Move | Where | Behaviour | "Remove animations" fallback |
+|---|---|---|---|
+| **Phase shift** | Deck switch, theme change | 450–550 ms chromatic split (red/cyan offset, slight skew) that settles on the new deck | 150 ms crossfade |
+| **Materialize** | App/widget appearing; launch | Fade in from blur and 0.86 scale; dissolve on launch, matching the launch animation | Instant |
+| **Ghost trail** | Radial menu flick | A fading 3-step trail follows the thumb to the slot; the slot flashes accent | Slot highlight only |
+| **Terminal stream** | Agent replies, "Why this?" | Text appears line by line with a block caret | Text shown at once |
+| **Consent glow** | Consent chips while data is being sent | Green pulse on each chip being sent | Static "sending…" label |
+| **Haunt** | Widgets surfacing (Void) | Drifts in 40 dp from the edge with blur, fades out the same way | Plain fade |
+
+**Motion rules:**
+- No motion longer than 600 ms. Nothing loops on the home screen except the very slow orb drift (≥ 12 s period), which stops on battery saver and on reduced motion
+- 60 fps budget on a Pixel 6a-class phone. Blur is the expensive part: use `RenderEffect` blur on API 31+, and **a pre-blurred static wallpaper layer** on API 30 (no live blur)
+
+### 2b.5 Where it lands in the milestones
+- **M1:** the theme engine (packs, roles → tokens, the contrast check), Phantom Glass surfaces, Materialize, fonts
+- **M2:** Haunt + Void surfacing
+- **M3:** Terminal Ghost Command Bar + Terminal stream
+- **M4:** Phase shift
+- **M5:** Ghost trail
+- **v0.2 (Link):** Consent glow
+
 ## 3. Goals, non-goals, anti-goals
 
 ### Goals (MVP)
@@ -72,12 +121,14 @@ Ghostdeck is built as **three layers with one-way dependencies**. Every feature 
 - Scripted tiles (Vexlang/Lua), calendar-based or geofence triggers
 - Notification inbox / triage, mindful-use friction, spatial canvas, desktop theme sync
 - Google Play release, cloud sync, accounts
+- Cloud AI in the MVP (Link, Mind and the agent bridge are v0.2/v0.3; the MVP ships only AI Handoff, which needs no network)
 - Replacing the system recents screen or gesture animations (Android doesn't allow it, see §5)
 
 ### Anti-goals (shipping any of these counts as failure, even if everything works)
 - **Any** network access, analytics, crash reporting SDK, or ads in the core APK
 - Feeling slower than the stock launcher (jank on swipe home, slow cold start)
 - Decks switching unexpectedly with no explanation ("magic" the user can't follow)
+- Any AI feature that sends data without showing consent chips first, or that runs an action without a tap
 - Asking for permissions up front. Each permission is requested at the moment the feature that needs it is turned on
 - Settings sprawl in the style of Nova's 400 toggles. Every setting has to earn its place
 
@@ -261,6 +312,34 @@ Apps get grouped automatically, and **the user can override everything**.
 - **No Gemini Nano/AICore dependency:** it's Google-only, limited to certain devices, and not acceptable on F-Droid. It could be offered later as an optional backend inside Mind for users who want it
 - Search in the MVP must be designed so Mind can add a scorer without refactoring (`interface ResultScorer`)
 
+### 8.7 AI integration: four layers (rev 4)
+
+**Principle:** AI is **opt-in, layered, and visible**. The core APK still has **no INTERNET permission**. Cloud access lives only in a separate plugin you choose to install, using your own keys, and nothing is sent without you seeing exactly what.
+
+| Layer | Name | What it does | Providers | Network | When |
+|---|---|---|---|---|---|
+| **0** | **Handoff** | `@claude <text>` sends the text to that installed app. Uses `ACTION_SEND` (text/plain), or `ACTION_PROCESS_TEXT` where the app supports it; the app is targeted by package | Claude, ChatGPT, Gemini, Microsoft Copilot, Perplexity, Le Chat, and any installed app that accepts shared text (discovered by intent query) | **None** in Ghostdeck | **MVP, M3** |
+| **1** | **Mind** | On-device model: semantic search, routing, short summaries, offline voice (§8.6) | Local | None (Mind APK has no INTERNET) | v0.2 |
+| **2** | **Link** | Separate opt-in **plugin APK with INTERNET**. Chat with your own API keys, streaming replies in the Terminal Ghost panel | Anthropic (Claude), OpenAI, Google Gemini API, Mistral, OpenRouter, and any **OpenAI-compatible endpoint**, including **your own Ollama on darkbox over Tailscale** | Only in Link | v0.2 |
+| **3** | **Agent bridge** | Link connects to **MCP servers** you configure, and to **desktop agents** through Nightwatch: start a task on blackbox and follow its progress as a tile | MCP servers; Claude Code, Codex, **Antigravity** and other desktop agents (bridge only: Antigravity has no phone API we know of) | Only in Link (+ Nightwatch) | v0.3 |
+
+*Copilot is Layer 0 only. As far as we know there's no general consumer chat API for direct calls.*
+
+#### 8.7.1 How agents behave inside Ghostdeck (all layers)
+1. **Consent chips.** Before anything is sent (Layers 2–3; Layer 0 shows the text being handed off), the panel lists exactly what's attached as chips: `clipboard`, `next 3 events`, `deck: Work`, `nightwatch alerts`. Tap a chip to remove it. **Nothing is attached by default except the typed text**; context is added with `+ context` or by a per-agent default the user sets. Chips glow while sending (§2b.4). Every send is written to a **local send log** (what, to whom, when; never the reply body unless the user keeps it), shown in the Privacy Ledger
+2. **Propose, don't act.** Agents get Ghostdeck's `Action` type (§2a) as their tools. Replies can contain **proposed actions** (`pin Focus 1h`, `set timer 10m`, `open Maps to …`, `nw restart warnflare`), shown as buttons under the reply. **Nothing runs without a tap.** Destructive actions (uninstall, deleting a deck) are never offered as agent tools
+3. **Agent-designed decks.** "Build me a travel deck" → the agent returns a config fragment in the §11 JSON schema → Ghostdeck validates it and shows a **visual diff preview** (added/removed apps, widgets, rules) → Apply / Discard. Applying takes a snapshot first (§11), so it can be undone
+4. **Prompt tiles.** Any prompt can be pinned as a tile with a schedule ("Morning brief" at 07:00), a provider and attached context chips (fixed when the tile is created). The result is cached and shown with "updated 07:00". Runs only through Link, and only when it's installed and the key is present
+5. **Side-by-side.** `@claude @gpt <text>` sends the same prompt (and the same chips) to two providers and shows the answers in two columns
+6. **Routing with "Why this?".** With Mind installed, plain `@ <text>` lets the local model pick a destination (stay local / the user's default cloud provider), and shows why ("routed → cloud · needs calendar reasoning"). Without Mind, `@` goes to the user's default provider
+7. **Ghostdeck as an agent surface (v0.3).** Ghostdeck's safe actions are exposed (a) through Android's app-function APIs for assistants where the platform offers them, and (b) as an **MCP server hosted by Link**, so the user's own agents (e.g. Claude Code on blackbox) can propose launcher actions. They still go through tap-to-confirm on the phone
+
+#### 8.7.2 Link plugin security
+- **Keys** live in the Android Keystore (AES-GCM wrapped), per provider. They're never exported in the §11 config file, never logged, never shown again after entry (only the last 4 characters)
+- **Exact hosts only:** Link talks only to the endpoints the user has enabled (`api.anthropic.com`, `api.openai.com`, …, or their own URL). A network security config with cleartext disabled, except an explicit opt-in for Tailscale `100.64.0.0/10` addresses
+- **No telemetry, no analytics,** same tracker gate as the core (§11a.2). Link is reproducibly built and on F-Droid. F-Droid will tag it with the "NonFreeNet" anti-feature when cloud providers are enabled, and we say so plainly
+- The Plugins screen shows Link's INTERNET permission clearly (§11a.2), so it's obvious where network access lives
+
 ---
 
 ## 9. Feature spec: Universal Widget System
@@ -317,9 +396,7 @@ TileState {
 The launcher draws it. A plugin cannot inject UI.
 
 ### 9.2 Theme
-- Material 3 dynamic colour **or** a Cybercore theme (neon on near-black; the palette comes from the org kit's theme list so it matches the Pages sites)
-- Accent per deck overrides the theme accent
-- A monospace typeface for tiles is offered as an option (fits the "power tool" feel)
+See **§2b** (design language, theme packs, motion). Tiles use Phantom Glass surfaces. Tile *values* can switch to JetBrains Mono as a per-tile option (the "power tool" look).
 
 ---
 
@@ -437,7 +514,7 @@ The descriptor lists **verbs** (name, description, argument hint) and **tile typ
 2. **No behavioural tracking.** Ghostdeck learns from your use **only on your device**, for you, and shows you everything it has learned (11a.3).
 3. **No selling or sharing of data.** There is no server to send it to.
 4. **Local-first.** All settings, layouts and learned signals live on the device. Export them yourself if you want them anywhere else.
-5. **Optional offline AI.** It's a separate opt-in APK, runs entirely on-device, and has no network access either.
+5. **Optional AI, on-device by default.** Cloud AI only through the separate Link plugin, with your own keys, and nothing is sent without you seeing exactly what.
 6. **Transparent permissions.** Every permission is requested at the moment it's needed, with a plain-language reason, and listed in the Privacy Ledger.
 7. **No account.** Nothing to sign up for, ever.
 
@@ -452,6 +529,7 @@ The descriptor lists **verbs** (name, description, argument hint) and **tile typ
 | **`allowBackup` policy** | Android auto-backup to Google Drive is **off** (`android:allowBackup="false"`, plus data-extraction rules that exclude everything). Backups happen only through the user's own export |
 | **Data at rest** | App-private storage. The learned-signals DB can be encrypted (SQLCipher) *(Claude's call: plaintext in the MVP because app sandboxing already protects it; encryption as a setting in v0.2)* |
 | **Plugins** | The plugin list shows each plugin's own permissions (including whether it has INTERNET), so users can see where network access lives |
+| **AI (rev 4)** | Handoff (Layer 0) needs no network. Link is the only Ghostdeck component with INTERNET, and it's a separate opt-in APK. Consent chips before every send, a local send log in the Privacy Ledger, keys in the Keystore and never in exports (§8.7) |
 
 ### 11a.3 In-app transparency screens
 - **Privacy Ledger:** every permission Ghostdeck holds, why, which feature uses it, when it was granted, and a toggle or deep link to revoke it. Includes plugins and automation grants
@@ -462,7 +540,9 @@ The descriptor lists **verbs** (name, description, argument hint) and **tile typ
 
 ## 12. Roadmap after the MVP (only so we don't paint ourselves into a corner)
 
-1. **v0.2: Activity Center + Mind**
+1. **v0.2: Activity Center + Mind + Link**
+   - **Ghostdeck Link** (§8.7 Layer 2): bring-your-own-key chat with Claude, OpenAI, Gemini, Mistral, OpenRouter and OpenAI-compatible endpoints (Ollama@darkbox). Consent chips, proposed actions, agent-designed decks, prompt tiles, side-by-side
+   - **v0.3** adds the Agent bridge (MCP + desktop agents via Nightwatch) and Ghostdeck-as-agent-surface (§8.7 Layer 3, §8.7.1 item 7)
    - **Unified Activity Center** (owner's idea, moved up from v0.3): one customisable sheet or page for notifications, missed calls, messages, reminders and upcoming events
    - Activity sources:
      - `NotificationListenerService`. **Missed calls and messages come from their notifications, not from `READ_CALL_LOG`/`READ_SMS`.** Those permissions are restricted on Play and too invasive for the charter
@@ -522,11 +602,11 @@ Still open: none that blocks planning.
 | # | Milestone | Done when |
 |---|---|---|
 | M0 | Privacy rails | Repo, CI with the INTERNET/tracker gate, `allowBackup=false`, charter text. **Before any feature work** |
-| M1 | Home core | Can be set as default HOME; grid, dock, folders, edit mode, icon packs, Private Space |
-| M2 | Universal widgets | `WidgetItem` model, AppWidget hosting, built-in tiles, stacks (manual), unified picker |
-| M3 | Intelligent Command Bar | §8.2 sources, typo tolerance, intent lexicon, NL actions, context ranking, "Why this?", **Smart Groups + Smart Folders** |
-| M4 | Context Decks + Adaptive | Decks, triggers, priority, pins, hysteresis, explainer sheet, history, templates, smart stack rotation, **appearance profiles + accessibility/dusk adaptation** |
-| M5 | Interaction + Plugins | **Radial menu (marking-menu flicks)**, remappable gestures, **combos, glyphs, conditional bindings, trigger→action**, aliases/macros, keyboard mode, automation API, AIDL plugin contract, Nightwatch reference plugin PR |
+| M1 | Home core + design base | Can be set as default HOME; grid, dock, folders, edit mode, icon packs, Private Space; **theme engine with the 4 bundled packs + contrast test, Phantom Glass surfaces, bundled fonts, Materialize (§2b)** |
+| M2 | Universal widgets | `WidgetItem` model, AppWidget hosting, built-in tiles, stacks (manual), unified picker, **Void surfacing + Haunt** |
+| M3 | Intelligent Command Bar | §8.2 sources, typo tolerance, intent lexicon, NL actions, context ranking, "Why this?", **Smart Groups + Smart Folders**, **Terminal Ghost styling + Terminal stream, AI Handoff (`@claude`, `@gpt`, `@gemini`, `@copilot` … to installed apps; §8.7 Layer 0)** |
+| M4 | Context Decks + Adaptive | Decks, triggers, priority, pins, hysteresis, explainer sheet, history, templates, smart stack rotation, **appearance profiles + accessibility/dusk adaptation**, **Phase shift** |
+| M5 | Interaction + Plugins | **Radial menu (marking-menu flicks) with Ghost trail**, remappable gestures, **combos, glyphs, conditional bindings, trigger→action**, aliases/macros, keyboard mode, automation API, AIDL plugin contract, Nightwatch reference plugin PR |
 | M6 | Ship | Export/import (JSON+TOML), snapshots, Privacy Ledger + What Ghostdeck knows, a11y pass, perf pass, F-Droid repo, Pages site (Cybercore kit + contact block), Wiki + vault note, README, `AGENT_HANDOFF.md` |
 
 ## 17. Success criteria
