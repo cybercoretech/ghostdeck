@@ -28,6 +28,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -169,8 +170,12 @@ fun SwipeActionPicker(
 ) {
     val tokens = LocalTokens.current
     Column(Modifier.padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        // The header is the way back: a full-width, at least 48 dp button that TalkBack announces as "Back".
         Text(
-            "Swipe-up action", Modifier.padding(horizontal = 16.dp, vertical = 8.dp).clickable(onClick = onBack).testTag("swipe-back"),
+            "Swipe-up action",
+            Modifier.fillMaxWidth().heightIn(min = MIN_TOUCH)
+                .clickable(onClickLabel = "Back", role = Role.Button, onClick = onBack)
+                .padding(horizontal = 16.dp, vertical = 12.dp).testTag("swipe-back"),
             color = tokens.text, fontFamily = GhostdeckFonts.display, fontWeight = FontWeight.SemiBold, fontSize = 18.sp,
         )
         LazyColumn(Modifier.heightIn(max = LIST_MAX_HEIGHT)) {
@@ -186,7 +191,13 @@ fun SwipeActionPicker(
                 )
             }
             items(apps, key = { "a-${it.key.userSerial}/${it.key.packageName}/${it.key.className}" }) { entry ->
-                MenuRow(entry.label, "swipe-app-${entry.key.packageName}", { onChoose(LaunchApp(entry.key)) })
+                // The same app can exist in two profiles: say which one this row is.
+                val badge = entry.profile.badge()
+                MenuRow(
+                    if (badge == null) entry.label else "${entry.label} ($badge)",
+                    "swipe-app-${entry.key.packageName}-${entry.key.userSerial}",
+                    { onChoose(LaunchApp(entry.key)) },
+                )
             }
         }
     }

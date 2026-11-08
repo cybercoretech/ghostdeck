@@ -54,7 +54,7 @@ internal fun pickerRows(apps: List<AppEntry>, hidden: Set<AppKey>, query: String
     return apps.filter { (showHidden || it.key !in hidden) && (q.isEmpty() || it.label.contains(q, ignoreCase = true)) }
 }
 
-private fun ProfileKind.badge(): String? = when (this) {
+internal fun ProfileKind.badge(): String? = when (this) {
     ProfileKind.WORK -> "Work"
     ProfileKind.PRIVATE -> "Private"
     else -> null
@@ -133,7 +133,7 @@ private fun PickerRow(
 ) {
     val tokens = LocalTokens.current
     Row(
-        Modifier.fillMaxWidth().heightIn(min = MIN_TOUCH).clickable { onPick(entry) }.padding(vertical = 4.dp).testTag("picker-row-${entry.key.packageName}"),
+        Modifier.fillMaxWidth().heightIn(min = MIN_TOUCH).clickable { onPick(entry) }.padding(vertical = 4.dp).testTag("picker-row-${entry.key.packageName}-${entry.key.userSerial}"),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -144,11 +144,11 @@ private fun PickerRow(
         )
         entry.profile.badge()?.let { badge ->
             Text(
-                badge, Modifier.testTag("picker-badge-${entry.key.packageName}"),
+                badge, Modifier.testTag("picker-badge-${entry.key.packageName}-${entry.key.userSerial}"),
                 color = tokens.accentAlt, fontFamily = GhostdeckFonts.mono, fontSize = 11.sp,
             )
         }
-        TextButton(onClick = { onToggleHidden(entry.key) }, Modifier.heightIn(min = MIN_TOUCH).testTag("picker-hide-${entry.key.packageName}")) {
+        TextButton(onClick = { onToggleHidden(entry.key) }, Modifier.heightIn(min = MIN_TOUCH).testTag("picker-hide-${entry.key.packageName}-${entry.key.userSerial}")) {
             Text(if (isHidden) "Unhide" else "Hide", color = tokens.accent, fontFamily = GhostdeckFonts.ui, fontSize = 13.sp)
         }
     }

@@ -14,6 +14,9 @@ import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.SemanticsPropertyKey
+import androidx.compose.ui.semantics.SemanticsPropertyReceiver
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 
 const val MATERIALIZE_MS = 260
@@ -32,11 +35,16 @@ fun materializeProgress(visible: Boolean, reduceMotion: Boolean): State<Float> {
     return anim.asState()
 }
 
+/** How far the tile has materialized, 0..1. Exposed through semantics for tests. */
+internal val MaterializedProgressKey = SemanticsPropertyKey<Float>("MaterializedProgress")
+private var SemanticsPropertyReceiver.materializedProgress by MaterializedProgressKey
+
 /** Fade in from blur and 0.86 scale over 260 ms (blur on API 31+). Instant when [reduceMotion]. */
 fun Modifier.materialize(visible: Boolean, reduceMotion: Boolean): Modifier = composed {
     val progress = materializeProgress(visible, reduceMotion)
     val blurPx = with(LocalDensity.current) { START_BLUR_DP.dp.toPx() }
-    graphicsLayer {
+    // Observable by tests (alpha itself is not in the semantics tree).
+    Modifier.semantics { materializedProgress = progress.value }.graphicsLayer {
         val p = progress.value
         val s = START_SCALE + (1f - START_SCALE) * p
         scaleX = s

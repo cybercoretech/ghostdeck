@@ -26,7 +26,7 @@ class EditCallbacks(
     val onItemLongPress: (Item) -> Unit,
     val onDragStart: (Item) -> Unit,
     val onEmptyLongPress: () -> Unit,
-    val onDragFinished: (DropOutcome) -> Unit,
+    val onDragFinished: (EditSession.Commit) -> Unit,
 )
 
 /**
