@@ -44,7 +44,7 @@ private const val COLUMNS = 4
 private const val SHEET_BLUR_PX = 48
 private val CHILD_ICON = 48.dp
 
-private fun Context.findWindow(): Window? = when (this) {
+internal fun Context.findWindow(): Window? = when (this) {
     is ComponentActivity -> window
     is ContextWrapper -> baseContext.findWindow()
     else -> null
@@ -56,18 +56,28 @@ private class DismissingLauncher(private val inner: AppLauncher, private val dis
     override fun launchShortcut(item: ShortcutItem, bounds: Rect?) { inner.launchShortcut(item, bounds); dismiss() }
 }
 
-/** Full-screen scrim with a glass panel of the folder's children. Blurs the wallpaper where the system allows it. */
+/**
+ * Blurs the wallpaper behind a sheet for as long as it is composed (where the system allows it) and
+ * returns the glass opacity the sheet must use: lower with blur, opaque enough to read without it.
+ */
 @Composable
-fun FolderSheet(folder: FolderItem, env: TileEnv, onDismiss: () -> Unit) {
+internal fun rememberSheetAlpha(): Float {
     val tokens = LocalTokens.current
     val window = LocalContext.current.findWindow()
     DisposableEffect(window) {
         if (window != null) applySheetBlur(window, SHEET_BLUR_PX)
         onDispose { if (window != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) window.setBackgroundBlurRadius(0) }
     }
-    val alpha = Contrast.sheetAlpha(tokens.glassAlpha, window != null && blurAvailable(window))
+    return Contrast.sheetAlpha(tokens.glassAlpha, window != null && blurAvailable(window))
+}
+
+/** Full-screen scrim with a glass panel of the folder's children. Blurs the wallpaper where the system allows it. */
+@Composable
+fun FolderSheet(folder: FolderItem, env: TileEnv, onDismiss: () -> Unit) {
+    val tokens = LocalTokens.current
+    val alpha = rememberSheetAlpha()
     val sheetEnv = remember(env, onDismiss) {
-        TileEnv(env.apps, env.unavailableUsers, env.swipeMarks, DismissingLauncher(env.launcher, onDismiss), env.icons, env.openFolder, env.showShortcuts)
+        env.copy(launcher = DismissingLauncher(env.launcher, onDismiss), layer = env.layer + 1)
     }
     Box(
         Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f))

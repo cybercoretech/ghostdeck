@@ -44,9 +44,11 @@ class MainActivity : ComponentActivity() {
             statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
         )
-        // At the root of a launcher, Back does nothing.
+        // At the root of a launcher, Back does nothing, except to leave edit mode.
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() = Unit
+            override fun handleOnBackPressed() {
+                if (viewModel.state.value.editing) viewModel.setEditing(false)
+            }
         })
         setContent {
             val state by viewModel.state.collectAsStateWithLifecycle()
@@ -59,6 +61,9 @@ class MainActivity : ComponentActivity() {
                 homePresses = homePresses,
                 onPageChanged = viewModel::goToPage,
                 onDismissIssue = viewModel::dismissLoadIssue,
+                onEmptyLongPress = { viewModel.setEditing(true) },
+                onDoneEditing = { viewModel.setEditing(false) },
+                onLayoutChange = { next -> viewModel.updateLayout { next } },
                 onSwipeUp = {}, // Command Bar arrives in a later milestone
                 onSwipeDown = { expandNotificationShade(this) },
             )

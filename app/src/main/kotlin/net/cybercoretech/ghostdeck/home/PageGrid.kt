@@ -5,7 +5,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import net.cybercoretech.ghostdeck.model.GridSize
@@ -17,8 +20,14 @@ private const val ICON_FRACTION = 0.6f
 
 /** Places items in sub-units: one sub-unit is half a cell, so half-offset items sit between columns. */
 @Composable
-fun PageGrid(page: Page, grid: GridSize, env: TileEnv, modifier: Modifier = Modifier) {
-    BoxWithConstraints(modifier.fillMaxSize().testTag("page-grid")) {
+fun PageGrid(page: Page, grid: GridSize, env: TileEnv, modifier: Modifier = Modifier, pageIndex: Int = 0) {
+    val geometry = env.geometry
+    if (geometry != null) DisposableEffect(pageIndex) { onDispose { geometry.grids.remove(pageIndex) } }
+    BoxWithConstraints(
+        modifier.fillMaxSize().testTag("page-grid").then(
+            if (geometry == null) Modifier else Modifier.onGloballyPositioned { geometry.grids[pageIndex] = it.boundsInRoot() },
+        ),
+    ) {
         val subW = maxWidth / (grid.cols * SUB)
         val subH = maxHeight / (grid.rows * SUB)
         page.placed.forEachIndexed { index, placed ->

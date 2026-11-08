@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -32,6 +33,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
@@ -47,6 +49,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import net.cybercoretech.ghostdeck.catalog.AppEntry
+import net.cybercoretech.ghostdeck.home.edit.DropGeometry
 import net.cybercoretech.ghostdeck.icons.IconProvider
 import net.cybercoretech.ghostdeck.model.AppItem
 import net.cybercoretech.ghostdeck.model.AppKey
@@ -67,9 +70,10 @@ private const val SWIPE_UP_DP = 24
 private const val STAGGER_MS = 20L
 private const val STAGGER_CAP_MS = 200L
 private const val UNAVAILABLE_ALPHA = 0.4f
+private const val DRAGGING_ALPHA = 0.25f
 
 /** What every tile needs from the home screen. */
-class TileEnv(
+data class TileEnv(
     val apps: Map<AppKey, AppEntry>,
     val unavailableUsers: Set<Long>,
     val swipeMarks: Boolean,
@@ -77,11 +81,30 @@ class TileEnv(
     val icons: IconProvider,
     val openFolder: (FolderItem) -> Unit,
     val showShortcuts: (Item) -> Unit,
+    /** Edit mode: where tiles are, for long-press hit tests and drops. Null for the drag ghost. */
+    val geometry: DropGeometry? = null,
+    /** Tiles of a folder sheet sit above the home screen. */
+    val layer: Int = 0,
+    /** The item being dragged is drawn faint where it came from. */
+    val draggingId: String? = null,
 )
 
 /** One home, dock or folder item: icon, label, tap, swipe-up action. [index] staggers the first appearance. */
 @Composable
 fun ItemTile(item: Item, env: TileEnv, iconSize: Dp, showLabel: Boolean, index: Int, modifier: Modifier = Modifier) {
+    val geometry = env.geometry
+    if (geometry != null) DisposableEffect(item.id) { onDispose { geometry.items.remove(item.id) } }
+    val tracked = modifier
+        .then(if (env.draggingId == item.id) Modifier.alpha(DRAGGING_ALPHA) else Modifier)
+        .then(
+            if (geometry == null) Modifier
+            else Modifier.onGloballyPositioned { geometry.items[item.id] = DropGeometry.Entry(it.boundsInRoot(), env.layer) },
+        )
+    ItemTileContent(item, env, iconSize, showLabel, index, tracked)
+}
+
+@Composable
+private fun ItemTileContent(item: Item, env: TileEnv, iconSize: Dp, showLabel: Boolean, index: Int, modifier: Modifier) {
     when (item) {
         is AppItem -> {
             val entry = env.apps[item.app]
