@@ -41,28 +41,35 @@ fun IconProvider.invalidateFor(event: CatalogEvent) {
     }
 }
 
-private const val CACHE_ENTRIES = 300
+/** The cache holds at most this many bitmap bytes (about 16 MB), however many icons that is. */
+private const val CACHE_BYTES = 16 * 1024 * 1024
 
 /**
  * Badged launcher icons (work/private badge included), cached by key and size.
  *
- * @param source the app's own launcher drawable, or null when it can't be resolved right now.
+ * @param source the app's own launcher drawable at the given density (dpi), or null when it can't be resolved right now.
  * @param draw renders a drawable (or the placeholder for null) at a size.
+ * @param densityDpi the density icons are requested at (the device's, so they are not scaled up from mdpi).
+ * @param maxBytes cache budget, counted in bitmap bytes.
  */
 class AndroidIconProvider(
-    private val source: (AppKey) -> Drawable?,
+    private val source: (AppKey, Int) -> Drawable?,
     private val draw: (Drawable?, Int) -> ImageBitmap = ::renderIcon,
+    private val densityDpi: Int = 0,
+    maxBytes: Int = CACHE_BYTES,
 ) : IconProvider {
-    constructor(context: Context) : this(launcherDrawables(context))
+    constructor(context: Context) : this(launcherDrawables(context), densityDpi = context.resources.displayMetrics.densityDpi)
 
-    private val cache = LruCache<Pair<AppKey, Int>, ImageBitmap>(CACHE_ENTRIES)
+    private val cache = object : LruCache<Pair<AppKey, Int>, ImageBitmap>(maxBytes) {
+        override fun sizeOf(key: Pair<AppKey, Int>, value: ImageBitmap) = value.width * value.height * 4
+    }
     private val _generation = MutableStateFlow(0)
     override val generation: StateFlow<Int> = _generation
 
     override fun icon(key: AppKey, sizePx: Int): ImageBitmap {
         val cacheKey = key to sizePx
         synchronized(cache) { cache.get(cacheKey) }?.let { return it }
-        val drawable = source(key)
+        val drawable = source(key, densityDpi)
         val bitmap = draw(drawable, sizePx)
         // The placeholder is never cached: a locked profile or an app mid-update has no icon *yet*.
         if (drawable != null) synchronized(cache) { cache.put(cacheKey, bitmap) }
@@ -79,18 +86,18 @@ class AndroidIconProvider(
     }
 
     /** The app's own launcher icon (badged), or null if it can't be resolved. */
-    fun drawable(key: AppKey): Drawable? = source(key)
+    fun drawable(key: AppKey): Drawable? = source(key, densityDpi)
 }
 
-private fun launcherDrawables(context: Context): (AppKey) -> Drawable? {
+private fun launcherDrawables(context: Context): (AppKey, Int) -> Drawable? {
     val launcherApps = context.getSystemService(LauncherApps::class.java)
     val userManager = context.getSystemService(UserManager::class.java)
-    return { key ->
+    return { key, density ->
         runCatching {
             val user = userManager.getUserForSerialNumber(key.userSerial) ?: error("no user")
             launcherApps.getActivityList(key.packageName, user)
                 .firstOrNull { it.componentName == ComponentName(key.packageName, key.className) }
-                ?.getBadgedIcon(0)
+                ?.getBadgedIcon(density)
         }.getOrNull()
     }
 }

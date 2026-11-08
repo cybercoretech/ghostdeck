@@ -78,6 +78,7 @@ class HomeViewModel(
 
     private fun publish(next: GhostdeckConfig, issue: String?, save: Boolean = false) {
         config = next
+        BadgeCounts.wanted = next.prefs.badges
         var problem = issue
         if (save) runCatching { store.save(next) }.onFailure { problem = listOfNotNull(problem, "Your layout couldn't be saved: ${it.message}").joinToString(" ") }
         _state.update {
