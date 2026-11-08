@@ -152,6 +152,8 @@ fun HomeScreen(
         )
 
         val edgePx = with(LocalDensity.current) { EDGE_DP.dp.toPx() }
+        // Long-lived effects read "Remove animations" live, not as it was when they started.
+        val latestReduceMotion by rememberUpdatedState(reduceMotion)
         LaunchedEffect(session.isDragging) {
             if (!session.isDragging) return@LaunchedEffect
             var held = 0L
@@ -166,19 +168,22 @@ fun HomeScreen(
                     held = 0L
                     val target = (pagerState.currentPage + side).coerceIn(0, pagerState.pageCount - 1)
                     if (target != pagerState.currentPage) {
-                        if (reduceMotion) pagerState.scrollToPage(target) else pagerState.animateScrollToPage(target)
+                        if (latestReduceMotion) pagerState.scrollToPage(target) else pagerState.animateScrollToPage(target)
                     }
                 }
             }
         }
 
+        // The effect outlives recompositions, so it reads the latest editing flag, callback and motion policy.
+        val latestEditing by rememberUpdatedState(state.editing)
+        val latestDoneEditing by rememberUpdatedState(onDoneEditing)
         LaunchedEffect(homePresses) {
             homePresses.collect {
                 openFolderId = null
                 menu = null
                 showPicker = false
-                if (state.editing) onDoneEditing()
-                if (reduceMotion) pagerState.scrollToPage(0) else pagerState.animateScrollToPage(0)
+                if (latestEditing) latestDoneEditing()
+                if (latestReduceMotion) pagerState.scrollToPage(0) else pagerState.animateScrollToPage(0)
             }
         }
         LaunchedEffect(pagerState) { snapshotFlow { pagerState.settledPage }.collect(onPageChanged) }

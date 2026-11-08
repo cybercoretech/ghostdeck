@@ -21,6 +21,7 @@ import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.unit.height
 import androidx.compose.ui.unit.width
 import androidx.test.core.app.ApplicationProvider
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.emptyFlow
 import net.cybercoretech.ghostdeck.catalog.AppEntry
 import net.cybercoretech.ghostdeck.catalog.ProfileKind
@@ -214,5 +215,46 @@ class HomeScreenTest {
         // An icon without a badge keeps announcing just its label.
         rule.onAllNodesWithContentDescription("B, has notifications").assertCountEquals(0)
         rule.onNodeWithText("B").assertIsDisplayed()
+    }
+
+    private fun showWithHomePresses(initial: HomeUiState, presses: MutableSharedFlow<Unit>, pages: MutableList<Int>, onDone: () -> Unit): (HomeUiState) -> Unit {
+        var state by mutableStateOf(initial)
+        val pack = ThemeRepository(ctx).load("ghostdeck")
+        rule.setContent {
+            HomeScreen(
+                state = state, pack = pack, launcher = launcher, icons = FakeIcons(), homePresses = presses,
+                onPageChanged = { pages += it }, onSwipeUp = {}, onSwipeDown = {},
+                onEmptyLongPress = { state = state.copy(editing = true) },
+                onDoneEditing = { onDone(); state = state.copy(editing = false) },
+            )
+        }
+        return { state = it }
+    }
+
+    @Test fun homePressExitsEditMode() {
+        val a = key("alpha")
+        val presses = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+        var done = 0
+        val initial = HomeUiState(page(Placed(AppItem("a", a), cell(0, 0))), apps(a), emptySet())
+        val set = showWithHomePresses(initial, presses, mutableListOf()) { done++ }
+        // Edit mode starts after HomeScreen entered composition, as it does on a real long-press.
+        set(initial.copy(editing = true))
+        rule.waitForIdle()
+        presses.tryEmit(Unit)
+        rule.waitForIdle()
+        assertEquals(1, done)
+    }
+
+    @Test fun homePressScrollsToFirstPage() {
+        val a = key("alpha"); val b = key("beta")
+        val layout = Layout(pages = listOf(Page(listOf(Placed(AppItem("a", a), cell(0, 0)))), Page(listOf(Placed(AppItem("b", b), cell(0, 0))))))
+        val presses = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+        val pages = mutableListOf<Int>()
+        showWithHomePresses(HomeUiState(layout, apps(a, b), emptySet(), currentPage = 1), presses, pages) {}
+        rule.onNodeWithText("Beta").assertIsDisplayed()
+        presses.tryEmit(Unit)
+        rule.waitForIdle()
+        rule.onNodeWithText("Alpha").assertIsDisplayed()
+        assertEquals(0, pages.last())
     }
 }
