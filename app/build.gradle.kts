@@ -24,6 +24,7 @@ android {
         targetSdk = 36
         versionCode = ghostdeckVersionCode
         versionName = ghostdeckVersionName
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     signingConfigs {
         if (releaseSigningConfigured) {
@@ -77,4 +78,8 @@ dependencies {
     testImplementation(platform("androidx.compose:compose-bom:2025.10.00"))
     testImplementation("androidx.compose.ui:ui-test-junit4")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
+    androidTestImplementation("androidx.test.ext:junit:1.3.0")
+    androidTestImplementation("androidx.test:runner:1.7.0")
+    androidTestImplementation(platform("androidx.compose:compose-bom:2025.10.00"))
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
 }
