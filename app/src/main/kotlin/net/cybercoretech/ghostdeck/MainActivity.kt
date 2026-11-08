@@ -4,53 +4,60 @@ import android.app.WallpaperManager
 import android.content.ActivityNotFoundException
 import android.content.ComponentName
 import android.content.Intent
+import android.graphics.Color
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.provider.Settings
 import android.view.KeyEvent
 import android.widget.Toast
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
-import net.cybercoretech.ghostdeck.badges.BadgeListenerService
-import net.cybercoretech.ghostdeck.edit.setHidden
-import net.cybercoretech.ghostdeck.onboarding.OnboardingScreen
-import net.cybercoretech.ghostdeck.platform.HomeRole
-import net.cybercoretech.ghostdeck.platform.barIconsDark
-import net.cybercoretech.ghostdeck.platform.colorHintsOf
-import net.cybercoretech.ghostdeck.settings.HomeSettingsHost
-import net.cybercoretech.ghostdeck.settings.LabsUnlock
-import net.cybercoretech.ghostdeck.settings.SettingsScreen
-import android.graphics.Color
-import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.ui.graphics.toArgb
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.testTag
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
+import net.cybercoretech.ghostdeck.badges.BadgeListenerService
+import net.cybercoretech.ghostdeck.edit.setHidden
 import net.cybercoretech.ghostdeck.home.HomeScreen
 import net.cybercoretech.ghostdeck.home.HomeViewModel
+import net.cybercoretech.ghostdeck.onboarding.OnboardingScreen
+import net.cybercoretech.ghostdeck.platform.HomeRole
+import net.cybercoretech.ghostdeck.platform.barIconsDark
+import net.cybercoretech.ghostdeck.platform.colorHintsOf
 import net.cybercoretech.ghostdeck.platform.expandNotificationShade
-import net.cybercoretech.ghostdeck.ui.theme.ThemeRepository
+import net.cybercoretech.ghostdeck.settings.HomeSettingsHost
+import net.cybercoretech.ghostdeck.settings.LabsUnlock
+import net.cybercoretech.ghostdeck.settings.SettingsScreen
+import net.cybercoretech.ghostdeck.settings.diagnosticsText
+import net.cybercoretech.ghostdeck.ui.theme.LocalMotionPolicy
+import net.cybercoretech.ghostdeck.ui.theme.rememberMotionPolicy
+import net.cybercoretech.ghostdeck.ui.theme.rememberThemePack
 import net.cybercoretech.ghostdeck.ui.theme.tokensFor
 
 class MainActivity : ComponentActivity() {
@@ -61,7 +68,7 @@ class MainActivity : ComponentActivity() {
 
     private val container get() = (application as GhostdeckApp).container
 
-    private val viewModel: HomeViewModel by viewModels {
+    internal val viewModel: HomeViewModel by viewModels {
         object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T =
@@ -70,7 +77,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private val homeRole by lazy { HomeRole(this) }
-    private val labsUnlock = LabsUnlock(SystemClock::elapsedRealtime).also { unlock ->
+    private val labsUnlock = LabsUnlock(clock = SystemClock::elapsedRealtime).also { unlock ->
         val handler = Handler(Looper.getMainLooper())
         unlock.scheduler = { delay, action ->
             val r = Runnable(action)
@@ -81,12 +88,28 @@ class MainActivity : ComponentActivity() {
         unlock.onHoldUnlocked = { if (settingsOpen) unlockLabs() }
     }
     private var settingsOpen by mutableStateOf(false)
+
+    /** Closing Settings also drops a pending Volume Down hold, so it cannot unlock Labs from the home screen. */
+    private fun closeSettings() {
+        settingsOpen = false
+        labsUnlock.cancelHold()
+    }
     private var notificationAccess by mutableStateOf(false)
 
     /** The system wallpaper's colour hints; decides the bar icon colour on home. */
     private var wallpaperHints by mutableStateOf<Int?>(null)
     private val wallpaperColorsListener = WallpaperManager.OnColorsChangedListener { colors, which ->
-        if (which and WallpaperManager.FLAG_SYSTEM != 0) wallpaperHints = colorHintsOf(colors)
+        if (which and WallpaperManager.FLAG_SYSTEM != 0) {
+            wallpaperHints = colorHintsOf(colors)
+            onSystemColorsChanged()
+        }
+    }
+
+    /** Bumped whenever the system colours change, so the dynamic System pack is rebuilt from the new scheme. */
+    private var systemColorsVersion by mutableIntStateOf(0)
+
+    internal fun onSystemColorsChanged() {
+        systemColorsVersion++
     }
 
     private fun wallpaperManager(): WallpaperManager? = runCatching { WallpaperManager.getInstance(this) }.getOrNull()
@@ -108,13 +131,9 @@ class MainActivity : ComponentActivity() {
     private fun writeDiagnostics(uri: Uri) {
         val state = viewModel.state.value
         val version = packageManager.getPackageInfo(packageName, 0).versionName
-        val text = buildString {
-            appendLine("Ghostdeck $version")
-            appendLine("Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
-            appendLine("Grid ${state.layout.grid.cols}x${state.layout.grid.rows}, dock ${state.layout.dock.items.size} slots")
-            appendLine("Theme pack ${state.prefs.themePack}")
-            appendLine("Icon pack ${state.prefs.iconPack ?: "system"}")
-        }
+        val text = diagnosticsText(
+            version, Build.VERSION.RELEASE, Build.VERSION.SDK_INT, state.layout.grid, state.prefs.themePack, state.prefs.iconPack,
+        )
         val saved = runCatching { contentResolver.openOutputStream(uri)!!.use { it.write(text.toByteArray()) } }
         Toast.makeText(this, if (saved.isSuccess) "Diagnostics saved" else "Couldn't save diagnostics", Toast.LENGTH_SHORT).show()
     }
@@ -179,15 +198,20 @@ class MainActivity : ComponentActivity() {
         })
         setContent {
             val state by viewModel.state.collectAsStateWithLifecycle()
-            val themes = remember { ThemeRepository(applicationContext) }
-            val pack = remember(state.prefs.themePack) { themes.load(state.prefs.themePack) }
-            container.iconPack = state.prefs.iconPack
-            container.accentArgb = tokensFor(pack, null).accent.toArgb()
+            val themes = container.themes
+            val pack = rememberThemePack(themes, state.prefs.themePack, systemColorsVersion)
+            val tokens = remember(pack) { tokensFor(pack) }
+            SideEffect {
+                container.iconPack = state.prefs.iconPack
+                container.accentArgb = tokens.accent.toArgb()
+            }
+            LaunchedEffect(state.prefs.labsUnlocked) { labsUnlock.syncUnlocked(state.prefs.labsUnlocked) }
             val homeShowing = state.loaded && state.prefs.onboardingDone && !settingsOpen
             val darkBarIcons = barIconsDark(wallpaperHints, homeShowing)
             LaunchedEffect(darkBarIcons) { applyBarStyle(darkBarIcons) }
-            when {
-                !state.loaded -> Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color(pack.roles.getValue("bg").toInt(16) or 0xFF000000.toInt())))
+            // One live motion policy for the whole tree: nested GhostdeckThemes reuse it instead of registering their own.
+            CompositionLocalProvider(LocalMotionPolicy provides rememberMotionPolicy()) { when {
+                !state.loaded -> Box(Modifier.fillMaxSize().background(tokens.ground).testTag("loading-box"))
                 !state.prefs.onboardingDone -> OnboardingScreen(
                     pack = pack,
                     onSetAsHome = { if (!homeRole.request(roleRequest)) finishOnboarding() },
@@ -232,11 +256,11 @@ class MainActivity : ComponentActivity() {
                             onOpenNotificationAccess = ::openNotificationAccess,
                             onLabsUnlocked = ::unlockLabs,
                             onExportDiagnostics = { diagnosticsExport.launch("ghostdeck-diagnostics.txt") },
-                            onClose = { settingsOpen = false },
+                            onClose = ::closeSettings,
                         )
                     })
                 }
-            }
+            } }
         }
     }
 
@@ -249,7 +273,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         val isHome = intent.action == Intent.ACTION_MAIN && Intent.CATEGORY_HOME in intent.categories.orEmpty()
         if (isHome && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
-            settingsOpen = false
+            closeSettings()
             _homePresses.tryEmit(Unit)
         }
     }

@@ -8,10 +8,10 @@ private const val HOLD_MS = 2_000L
  * The two secret ways into Labs (spec 10a.7): seven taps on the version within 3 s, or Volume Down held for 2 s.
  * Both return true exactly once, at the moment of unlocking; [lock] re-arms them.
  */
-class LabsUnlock(private val clock: () -> Long) {
+class LabsUnlock(initiallyUnlocked: Boolean = false, private val clock: () -> Long) {
     private val taps = ArrayDeque<Long>()
     private var holdStart: Long? = null
-    private var unlocked = false
+    private var unlocked = initiallyUnlocked
     private var cancelTimer: (() -> Unit)? = null
 
     /**
@@ -44,6 +44,18 @@ class LabsUnlock(private val clock: () -> Long) {
             cancelTimer = scheduler(HOLD_MS) { if (holdStart != null && unlock()) onHoldUnlocked() }
         }
         return if (now - start >= HOLD_MS) unlock() else false
+    }
+
+    /** Drops a pending hold without touching the unlocked state (Settings closed, Home pressed). */
+    fun cancelHold() {
+        cancelTimer?.invoke()
+        cancelTimer = null
+        holdStart = null
+    }
+
+    /** Mirrors the persisted flag once prefs have loaded, so a restart does not unlock (and toast) again. */
+    fun syncUnlocked(persisted: Boolean) {
+        unlocked = persisted
     }
 
     fun lock() {
