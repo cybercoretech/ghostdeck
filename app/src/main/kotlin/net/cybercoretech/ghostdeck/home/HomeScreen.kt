@@ -235,7 +235,11 @@ fun HomeScreen(
                     Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center) {
                         repeat(pageCount) { i ->
                             val color = if (i == pagerState.currentPage) tokens.text else tokens.muted.copy(alpha = 0.5f)
-                            Box(Modifier.padding(3.dp).size(6.dp).background(color, CircleShape))
+                            // A dark ring keeps the dots visible on light wallpapers.
+                            Box(
+                                Modifier.padding(2.dp).size(8.dp).background(HomeShadowColor.copy(alpha = 0.35f), CircleShape)
+                                    .padding(1.dp).background(color, CircleShape),
+                            )
                         }
                     }
                 }

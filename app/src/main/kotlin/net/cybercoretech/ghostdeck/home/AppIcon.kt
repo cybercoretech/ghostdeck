@@ -30,7 +30,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
@@ -97,6 +101,18 @@ data class TileEnv(
     val layer: Int = 0,
     /** The item being dragged is drawn faint where it came from. */
     val draggingId: String? = null,
+)
+
+/** Colour of the soft dark halo behind light home text and dots, so they read on any wallpaper (as Launcher3 does). */
+val HomeShadowColor = Color.Black.copy(alpha = 0.6f)
+
+/**
+ * Home label text. The shadow (1 dp down, 4 dp blur; [density] converts to the px Shadow wants) keeps the
+ * theme's light label legible on light wallpapers too.
+ */
+fun homeLabelStyle(color: Color, density: Float = 1f): TextStyle = TextStyle(
+    color = color, fontFamily = GhostdeckFonts.ui, fontSize = 11.sp,
+    shadow = Shadow(HomeShadowColor, offset = Offset(0f, 1f * density), blurRadius = 4f * density),
 )
 
 /** How a layout item is drawn, given what the catalog knows about its profile. */
@@ -268,9 +284,7 @@ fun AppIcon(
                     // The tile's own description already carries the label when a badge is showing.
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp, vertical = 2.dp)
                         .then(if (badge) Modifier.clearAndSetSemantics {} else Modifier),
-                    color = tokens.text,
-                    fontFamily = GhostdeckFonts.ui,
-                    fontSize = 11.sp,
+                    style = homeLabelStyle(tokens.text, LocalDensity.current.density),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     textAlign = TextAlign.Center,

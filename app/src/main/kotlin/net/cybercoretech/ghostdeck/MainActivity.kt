@@ -1,5 +1,6 @@
 package net.cybercoretech.ghostdeck
 
+import android.app.WallpaperManager
 import android.content.ActivityNotFoundException
 import android.content.ComponentName
 import android.content.Intent
@@ -22,6 +23,8 @@ import net.cybercoretech.ghostdeck.badges.BadgeListenerService
 import net.cybercoretech.ghostdeck.edit.setHidden
 import net.cybercoretech.ghostdeck.onboarding.OnboardingScreen
 import net.cybercoretech.ghostdeck.platform.HomeRole
+import net.cybercoretech.ghostdeck.platform.barIconsDark
+import net.cybercoretech.ghostdeck.platform.colorHintsOf
 import net.cybercoretech.ghostdeck.settings.HomeSettingsHost
 import net.cybercoretech.ghostdeck.settings.LabsUnlock
 import net.cybercoretech.ghostdeck.settings.SettingsScreen
@@ -33,6 +36,7 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.ui.graphics.toArgb
@@ -78,6 +82,19 @@ class MainActivity : ComponentActivity() {
     }
     private var settingsOpen by mutableStateOf(false)
     private var notificationAccess by mutableStateOf(false)
+
+    /** The system wallpaper's colour hints; decides the bar icon colour on home. */
+    private var wallpaperHints by mutableStateOf<Int?>(null)
+    private val wallpaperColorsListener = WallpaperManager.OnColorsChangedListener { colors, which ->
+        if (which and WallpaperManager.FLAG_SYSTEM != 0) wallpaperHints = colorHintsOf(colors)
+    }
+
+    private fun wallpaperManager(): WallpaperManager? = runCatching { WallpaperManager.getInstance(this) }.getOrNull()
+
+    private fun applyBarStyle(darkIcons: Boolean) {
+        val style = if (darkIcons) SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT) else SystemBarStyle.dark(Color.TRANSPARENT)
+        enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
+    }
 
     private fun finishOnboarding() = viewModel.updatePrefs { it.copy(onboardingDone = true) }
 
@@ -148,10 +165,12 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
-            navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
-        )
+        applyBarStyle(darkIcons = false)
+        // Colour hints need no permission (unlike reading wallpaper pixels).
+        wallpaperManager()?.let { wm ->
+            wallpaperHints = runCatching { colorHintsOf(wm.getWallpaperColors(WallpaperManager.FLAG_SYSTEM)) }.getOrNull()
+            runCatching { wm.addOnColorsChangedListener(wallpaperColorsListener, Handler(Looper.getMainLooper())) }
+        }
         // At the root of a launcher, Back does nothing, except to leave edit mode.
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -164,6 +183,9 @@ class MainActivity : ComponentActivity() {
             val pack = remember(state.prefs.themePack) { themes.load(state.prefs.themePack) }
             container.iconPack = state.prefs.iconPack
             container.accentArgb = tokensFor(pack, null).accent.toArgb()
+            val homeShowing = state.loaded && state.prefs.onboardingDone && !settingsOpen
+            val darkBarIcons = barIconsDark(wallpaperHints, homeShowing)
+            LaunchedEffect(darkBarIcons) { applyBarStyle(darkBarIcons) }
             when {
                 !state.loaded -> Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color(pack.roles.getValue("bg").toInt(16) or 0xFF000000.toInt())))
                 !state.prefs.onboardingDone -> OnboardingScreen(
@@ -216,6 +238,11 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onDestroy() {
+        wallpaperManager()?.let { runCatching { it.removeOnColorsChangedListener(wallpaperColorsListener) } }
+        super.onDestroy()
     }
 
     override fun onNewIntent(intent: Intent) {
