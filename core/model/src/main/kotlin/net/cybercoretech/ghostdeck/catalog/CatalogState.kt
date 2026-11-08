@@ -8,6 +8,8 @@ sealed interface CatalogEvent {
     data class Snapshot(val userSerial: Long, val profile: ProfileKind, val entries: List<AppEntry>) : CatalogEvent
     data class PackageUpserted(val userSerial: Long, val packageName: String, val entries: List<AppEntry>) : CatalogEvent
     data class PackageRemoved(val userSerial: Long, val packageName: String) : CatalogEvent
+    /** Temporary (e.g. storage unmounted): entries are hidden, layout items are kept. */
+    data class PackagesUnavailable(val userSerial: Long, val packageNames: List<String>) : CatalogEvent
     data class ProfileAvailability(val userSerial: Long, val available: Boolean) : CatalogEvent
 }
 
@@ -31,6 +33,9 @@ data class CatalogState(
             entries = entries.withoutPackage(event.userSerial, event.packageName) + event.entries.associateBy { it.key },
         )
         is CatalogEvent.PackageRemoved -> copy(entries = entries.withoutPackage(event.userSerial, event.packageName))
+        is CatalogEvent.PackagesUnavailable -> copy(
+            entries = event.packageNames.fold(entries) { acc, pkg -> acc.withoutPackage(event.userSerial, pkg) },
+        )
         is CatalogEvent.ProfileAvailability -> copy(
             unavailableUsers = if (event.available) unavailableUsers - event.userSerial else unavailableUsers + event.userSerial,
         )

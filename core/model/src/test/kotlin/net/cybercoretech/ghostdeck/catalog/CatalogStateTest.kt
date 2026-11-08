@@ -106,4 +106,23 @@ class CatalogStateTest {
         val layout = layoutWith(AppKey("p", "Old", 10))
         assertTrue(layout == layout.resolveStale(state))
     }
+
+    @Test fun packagesUnavailableHidesEntriesButKeepsLayoutItems() {
+        val state = CatalogState().reduce(
+            snapshot(0, ProfileKind.PERSONAL, entry("p", "A", "A"), entry("q", "Q", "Q")),
+        )
+        val event = CatalogEvent.PackagesUnavailable(0, listOf("p"))
+        val after = state.reduce(event)
+        assertEquals(setOf(AppKey("q", "Q", 0)), after.entries.keys)
+        val layout = layoutWith(AppKey("p", "A", 0))
+        assertEquals(layout, layout.reconcile(event, after))
+    }
+
+    @Test fun staleNotRemappedWhilePackageUnavailable() {
+        val state = CatalogState()
+            .reduce(snapshot(0, ProfileKind.PERSONAL, entry("p", "A", "A")))
+            .reduce(CatalogEvent.PackagesUnavailable(0, listOf("p")))
+        val layout = layoutWith(AppKey("p", "A", 0))
+        assertEquals(layout, layout.resolveStale(state))
+    }
 }
