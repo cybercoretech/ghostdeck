@@ -12,6 +12,8 @@ import net.cybercoretech.ghostdeck.catalog.AppCatalog
 import net.cybercoretech.ghostdeck.catalog.CatalogEvent
 import net.cybercoretech.ghostdeck.data.ConfigStore
 import net.cybercoretech.ghostdeck.icons.AndroidIconProvider
+import net.cybercoretech.ghostdeck.icons.IconPackIconProvider
+import net.cybercoretech.ghostdeck.icons.IconPackRepository
 import net.cybercoretech.ghostdeck.icons.IconProvider
 import net.cybercoretech.ghostdeck.platform.AndroidAppCatalog
 import net.cybercoretech.ghostdeck.platform.AndroidAppLauncher
@@ -27,7 +29,15 @@ class AppContainer(app: Application) {
         if (app.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) LoggingCatalog(it) else it
     }
     val launcher: AppLauncher = AndroidAppLauncher(app)
-    val icons: IconProvider = AndroidIconProvider(app)
+    /** Selected icon pack and accent colour, pushed in from the UI state (see MainActivity). */
+    @Volatile var iconPack: String? = null
+    @Volatile var accentArgb: Int = 0xFFA78BFA.toInt()
+    private val baseIcons = AndroidIconProvider(app)
+    val iconPacks = IconPackRepository(app)
+    val icons: IconProvider = IconPackIconProvider(
+        base = baseIcons, repo = iconPacks, context = app,
+        packProvider = { iconPack }, accent = { accentArgb }, fallbackDrawable = baseIcons::drawable,
+    )
     val defaults: DefaultAppsResolver = AndroidDefaultApps(app)
 }
 

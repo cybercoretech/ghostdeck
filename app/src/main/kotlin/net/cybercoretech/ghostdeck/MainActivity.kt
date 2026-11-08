@@ -10,6 +10,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.runtime.remember
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModel
@@ -21,6 +23,7 @@ import net.cybercoretech.ghostdeck.home.HomeScreen
 import net.cybercoretech.ghostdeck.home.HomeViewModel
 import net.cybercoretech.ghostdeck.platform.expandNotificationShade
 import net.cybercoretech.ghostdeck.ui.theme.ThemeRepository
+import net.cybercoretech.ghostdeck.ui.theme.tokensFor
 
 class MainActivity : ComponentActivity() {
     private val _homePresses = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
@@ -53,9 +56,14 @@ class MainActivity : ComponentActivity() {
         setContent {
             val state by viewModel.state.collectAsStateWithLifecycle()
             val themes = remember { ThemeRepository(applicationContext) }
+            val pack = remember(state.prefs.themePack) { themes.load(state.prefs.themePack) }
+            container.iconPack = state.prefs.iconPack
+            container.accentArgb = tokensFor(pack, null).accent.toArgb()
+            // Re-create the home tree when the pack changes so every icon is re-requested.
+            key(state.prefs.iconPack) {
             HomeScreen(
                 state = state,
-                pack = remember(state.prefs.themePack) { themes.load(state.prefs.themePack) },
+                pack = pack,
                 launcher = container.launcher,
                 icons = container.icons,
                 homePresses = homePresses,
@@ -67,6 +75,7 @@ class MainActivity : ComponentActivity() {
                 onSwipeUp = {}, // Command Bar arrives in a later milestone
                 onSwipeDown = { expandNotificationShade(this) },
             )
+            }
         }
     }
 

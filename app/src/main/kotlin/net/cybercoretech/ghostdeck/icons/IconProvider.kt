@@ -6,6 +6,7 @@ import android.content.pm.LauncherApps
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.drawable.Drawable
 import android.os.UserManager
 import android.util.LruCache
 import androidx.compose.ui.graphics.ImageBitmap
@@ -33,15 +34,18 @@ class AndroidIconProvider(context: Context) : IconProvider {
         return bitmap
     }
 
+    /** The app's own launcher icon (badged), or null if it can't be resolved. */
+    fun drawable(key: AppKey): Drawable? = runCatching {
+        val user = userManager.getUserForSerialNumber(key.userSerial) ?: error("no user")
+        launcherApps.getActivityList(key.packageName, user)
+            .firstOrNull { it.componentName == ComponentName(key.packageName, key.className) }
+            ?.getBadgedIcon(0)
+    }.getOrNull()
+
     private fun render(key: AppKey, size: Int): ImageBitmap {
         val bmp = createBitmap(size, size)
         val canvas = Canvas(bmp)
-        val drawable = runCatching {
-            val user = userManager.getUserForSerialNumber(key.userSerial) ?: error("no user")
-            launcherApps.getActivityList(key.packageName, user)
-                .firstOrNull { it.componentName == ComponentName(key.packageName, key.className) }
-                ?.getBadgedIcon(0)
-        }.getOrNull()
+        val drawable = drawable(key)
         if (drawable != null) {
             drawable.setBounds(0, 0, size, size)
             drawable.draw(canvas)
