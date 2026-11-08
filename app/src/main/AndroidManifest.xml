@@ -17,9 +17,21 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Ghostdeck"
         tools:targetApi="36">
+        <!-- screenOrientation is left at its default (unspecified): the value is redundant and lint flags setting it. -->
         <activity
             android:name=".MainActivity"
-            android:exported="true">
+            android:clearTaskOnLaunch="true"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:resizeableActivity="true"
+            android:stateNotNeeded="true"
+            android:windowSoftInputMode="adjustPan">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
