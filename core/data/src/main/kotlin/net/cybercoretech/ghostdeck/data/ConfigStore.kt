@@ -35,6 +35,8 @@ class ConfigStore(
     private val clock: () -> Long = System::currentTimeMillis,
     /** Moves the corrupt file aside; injectable so tests need no filesystem permissions. Must not replace an existing target. */
     private val mover: (Path, Path) -> Unit = { from, to -> Files.move(from, to) },
+    /** Reads the config file; injectable so tests can make an existing file unreadable. */
+    private val reader: (File) -> String = File::readText,
 ) {
     val file: File = File(dir, "config.json")
     private val tmp: File = File(dir, "config.json.tmp")
@@ -42,7 +44,7 @@ class ConfigStore(
     fun load(): LoadResult {
         if (!file.exists()) return LoadResult.Missing
         val text = try {
-            file.readText()
+            reader(file)
         } catch (e: IOException) {
             return LoadResult.Unreadable(e.message ?: e.javaClass.simpleName)
         }

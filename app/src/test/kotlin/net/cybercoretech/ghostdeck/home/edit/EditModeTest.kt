@@ -3,6 +3,8 @@ package net.cybercoretech.ghostdeck.home.edit
 import android.content.Context
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.center
@@ -329,4 +331,22 @@ class EditModeTest {
         assertEquals(2, changes.size)
         assertTrue("hidden then unhidden: net visible", key("alpha") !in net.hidden)
     }
+
+    private fun dragAppAndCheckUninstall(system: Boolean) {
+        launcher.systemApp = system
+        show(editing = true)
+        rule.waitUntil(5_000) { launcher.systemAppThreads.size >= 2 }
+        rule.waitForIdle()
+        rule.onNodeWithTag("item-a").performTouchInput { down(center) }
+        rule.mainClock.advanceTimeBy(800)
+        rule.onNodeWithTag("item-a").performTouchInput { moveBy(Offset(0f, 40f)) }
+        rule.onNodeWithTag("item-a").performTouchInput { moveBy(Offset(0f, 40f)) }
+        rule.waitForIdle()
+        if (system) rule.onNodeWithTag("drop-uninstall").assertIsNotEnabled() else rule.onNodeWithTag("drop-uninstall").assertIsEnabled()
+        rule.onNodeWithTag("item-a").performTouchInput { up() }
+    }
+
+    @Test fun uninstallTargetIsDisabledForASystemApp() = dragAppAndCheckUninstall(system = true)
+
+    @Test fun uninstallTargetIsEnabledForAUserApp() = dragAppAndCheckUninstall(system = false)
 }

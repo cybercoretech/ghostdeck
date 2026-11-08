@@ -16,6 +16,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalContext
 
 /** Reads the system's "Remove animations" and battery-saver state. Nothing in Ghostdeck animates against these. */
@@ -36,6 +37,12 @@ internal object UnprovidedMotionPolicy : MotionPolicy {
     override val reduceMotion = false
     override val powerSave = false
 }
+
+/**
+ * Tests set this to true to read animation progress through semantics. In production it stays false, so the
+ * animated values are never read there: reading them would invalidate the semantics every frame (spec 13).
+ */
+internal val LocalMotionProbe = staticCompositionLocalOf { false }
 
 val LocalMotionPolicy = compositionLocalOf<MotionPolicy> { UnprovidedMotionPolicy }
 

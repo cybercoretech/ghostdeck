@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.test.core.app.ApplicationProvider
 import net.cybercoretech.ghostdeck.testutil.RobolectricMotion
 import org.junit.Assert.assertEquals
@@ -38,6 +39,18 @@ class GhostdeckThemeTest {
         pack = packs[1] // recomposes the theme with new tokens
         rule.waitForIdle()
         assertSame(seen.first(), seen.last())
+    }
+
+    @Test fun loadingBoxUsesGroundToken() {
+        val pack = ThemeRepository(ctx).load("ghostdeck")
+        rule.setContent {
+            androidx.compose.runtime.CompositionLocalProvider(LocalMotionProbe provides true) {
+                GhostdeckTheme(pack) { net.cybercoretech.ghostdeck.LoadingBox(LocalTokens.current.ground) }
+            }
+        }
+        val ground = rule.onNodeWithTag("loading-box").fetchSemanticsNode().config[net.cybercoretech.ghostdeck.LoadingGroundKey]
+        assertEquals(tokensFor(pack).ground, ground)
+        assertEquals(Color(0xFF07060D), ground)
     }
 
     @Test fun systemPackFollowsWallpaperColourChange() {

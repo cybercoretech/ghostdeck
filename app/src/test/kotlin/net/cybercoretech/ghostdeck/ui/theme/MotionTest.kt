@@ -96,7 +96,11 @@ class MotionTest {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val pack = ThemeRepository(context).load(DEFAULT_PACK_ID)
         rule.mainClock.autoAdvance = false // the infinite drift would otherwise keep the test from idling
-        rule.setContent { GhostdeckTheme(pack) { AmbientOrbs(Modifier.fillMaxSize().testTag("orbs")) } }
+        rule.setContent {
+            CompositionLocalProvider(LocalMotionProbe provides true) {
+                GhostdeckTheme(pack) { AmbientOrbs(Modifier.fillMaxSize().testTag("orbs")) }
+            }
+        }
         rule.mainClock.advanceTimeBy(ms)
         return rule.onNodeWithTag("orbs").fetchSemanticsNode().config[OrbPhaseKey]
     }
@@ -106,11 +110,23 @@ class MotionTest {
         rule.mainClock.advanceTimeBy(ORB_DRIFT_MS / 2L)
         val later = rule.onNodeWithTag("orbs").fetchSemanticsNode().config[OrbPhaseKey]
         assertTrue("phase moved from $early to $later", later > early + 0.2f)
+        assertEquals(true, rule.onNodeWithTag("orbs").fetchSemanticsNode().config[OrbsAnimatingKey])
+    }
+
+    @Test fun productionDoesNotPublishThePerFramePhase() {
+        val pack = ThemeRepository(ApplicationProvider.getApplicationContext<Context>()).load(DEFAULT_PACK_ID)
+        rule.mainClock.autoAdvance = false
+        rule.setContent { GhostdeckTheme(pack) { AmbientOrbs(Modifier.fillMaxSize().testTag("orbs")) } }
+        rule.mainClock.advanceTimeBy(1_000)
+        val config = rule.onNodeWithTag("orbs").fetchSemanticsNode().config
+        assertEquals(true, config[OrbsAnimatingKey])
+        assertEquals(false, config.contains(OrbPhaseKey))
     }
 
     @Test fun orbPhaseStaysZeroWhenReduceMotion() {
         RobolectricMotion.disableAnimations(ApplicationProvider.getApplicationContext<Context>())
         assertEquals(0f, phaseAfter(ORB_DRIFT_MS / 2L), 0f)
+        assertEquals(false, rule.onNodeWithTag("orbs").fetchSemanticsNode().config[OrbsAnimatingKey])
     }
 
     @Test fun nestedThemesShareOneMotionReceiver() {

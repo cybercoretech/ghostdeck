@@ -35,6 +35,8 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -187,6 +189,7 @@ private fun DropTarget(
     val shape = RoundedCornerShape(14.dp)
     GlassSurface(
         Modifier.padding(start = 4.dp, end = 4.dp).heightIn(min = MIN_TOUCH).alpha(if (enabled) 1f else 0.35f).testTag(tag)
+            .semantics { if (!enabled) disabled() }
             .onGloballyPositioned { onBounds(it.boundsInRoot()) }
             .then(if (hovered) Modifier.border(BorderStroke(2.dp, tokens.error), shape) else Modifier),
         shape = shape,

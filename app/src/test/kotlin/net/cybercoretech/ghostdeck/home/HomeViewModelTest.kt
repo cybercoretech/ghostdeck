@@ -76,6 +76,25 @@ class HomeViewModelTest {
         assertTrue(vm.state.value.loaded)
     }
 
+    @Test fun unreadableConfigIsNeverOverwrittenByLaterSaves() {
+        // A real file with real content that cannot be read (as after a transient I/O error).
+        val dir = File(tmp.root, "unreadable").apply { mkdirs() }
+        val original = """{"schema":1,"keep":"this exact text"}"""
+        File(dir, "config.json").writeText(original)
+        store = ConfigStore(dir, reader = { throw java.io.IOException("EIO") })
+        val vm = vm()
+        assertNotNull(vm.state.value.loadIssue)
+        assertTrue("no onboarding for a user who has a config", vm.state.value.prefs.onboardingDone)
+
+        vm.updateLayout { it.copy(grid = net.cybercoretech.ghostdeck.model.GridSize(4, 5)) }
+        vm.updatePrefs { it.copy(swipeMarks = false) }
+        catalog.flow.tryEmit(CatalogEvent.Snapshot(0, ProfileKind.PERSONAL, listOf(entry(phone))))
+
+        assertEquals(original, File(dir, "config.json").readText())
+        assertEquals("edits still apply in memory", false, vm.state.value.prefs.swipeMarks)
+        assertTrue(dir.list()!!.none { it.startsWith("config.corrupt-") || it.endsWith(".tmp") })
+    }
+
     @Test fun missingConfigCreatesDefaultAndSaves() {
         val vm = vm()
         val dock = vm.state.value.layout.dock.items

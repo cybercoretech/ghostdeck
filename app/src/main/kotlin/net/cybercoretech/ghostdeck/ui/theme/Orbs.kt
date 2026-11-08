@@ -23,9 +23,13 @@ import kotlin.math.sin
 /** One full drift cycle. The brief asks for 12 s or more. */
 const val ORB_DRIFT_MS = 16_000
 
-/** The drift phase (0..1) the orbs are at; 0 while still. Exposed through semantics for tests. */
+/** The drift phase (0..1) the orbs are at; 0 while still. Only published when [LocalMotionProbe] is on (tests). */
 internal val OrbPhaseKey = SemanticsPropertyKey<Float>("OrbPhase")
 private var SemanticsPropertyReceiver.orbPhase by OrbPhaseKey
+
+/** Whether the orbs are drifting (true) or holding still. Changes only when the motion policy does. */
+internal val OrbsAnimatingKey = SemanticsPropertyKey<Boolean>("OrbsAnimating")
+private var SemanticsPropertyReceiver.orbsAnimating by OrbsAnimatingKey
 
 /** Two soft radial colour orbs (accent, accentAlt) behind the home content. Still when motion is off. */
 @Composable
@@ -39,8 +43,14 @@ fun AmbientOrbs(modifier: Modifier = Modifier) {
         animationSpec = infiniteRepeatable(tween(ORB_DRIFT_MS, easing = LinearEasing), RepeatMode.Restart),
         label = "orbPhase",
     )
-    // Reading the State in the semantics block (on demand) leaves composition untouched and lets tests observe the drift.
-    Canvas(modifier.semantics { orbPhase = phase?.value ?: 0f }) {
+    val probe = LocalMotionProbe.current
+    // The per-frame phase is read here only under the test probe; otherwise just the static/animating flag is exposed.
+    Canvas(
+        modifier.semantics {
+            orbsAnimating = phase != null
+            if (probe) orbPhase = phase?.value ?: 0f
+        },
+    ) {
         val angle = ((phase?.value ?: 0f) * 2 * PI).toFloat()
         val radius = size.maxDimension * 0.6f
         fun orb(color: Color, center: Offset) = drawCircle(

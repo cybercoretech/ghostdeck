@@ -306,11 +306,13 @@ class HomeScreenTest {
         onTileComposed: ((String) -> Unit)? = null,
     ) {
         rule.setContent {
-            HomeScreen(
-                state = state(), pack = pack(), launcher = launcher, icons = icons, homePresses = emptyFlow(),
-                onPageChanged = {}, onSwipeUp = { swipedUp++ }, onSwipeDown = { swipedDown++ },
-                wallpaperOffsets = wallpaperOffsets, onTileComposed = onTileComposed,
-            )
+            androidx.compose.runtime.CompositionLocalProvider(net.cybercoretech.ghostdeck.ui.theme.LocalMotionProbe provides true) {
+                HomeScreen(
+                    state = state(), pack = pack(), launcher = launcher, icons = icons, homePresses = emptyFlow(),
+                    onPageChanged = {}, onSwipeUp = { swipedUp++ }, onSwipeDown = { swipedDown++ },
+                    wallpaperOffsets = wallpaperOffsets, onTileComposed = onTileComposed,
+                )
+            }
         }
     }
 

@@ -41,6 +41,9 @@ class HomeViewModel(
     private var config: GhostdeckConfig? = null
     private var catalogState = CatalogState()
 
+    /** True while the original config file is unreadable: nothing may be written over it. */
+    private var savesBlocked = false
+
     init {
         // Counts reach the UI only while the badges pref is on; publish() re-applies the gate when prefs change.
         viewModelScope.launch(io) {
@@ -57,11 +60,17 @@ class HomeViewModel(
             is LoadResult.Loaded -> publish(result.config, null)
             LoadResult.Missing -> publish(freshConfig(), null, save = true)
             is LoadResult.Corrupt -> publish(freshConfig(), corruptMessage(result), save = true)
-            // The file is untouched: run on defaults for this session but never write over it at startup, so the next start retries.
-            is LoadResult.Unreadable -> publish(
-                freshConfig(),
-                "Your layout file couldn't be read right now (${result.reason}), so Ghostdeck started with defaults. Your saved layout was left untouched.",
-            )
+            // The file is untouched and must stay that way: run on defaults in memory, write nothing this session
+            // (see [savesBlocked]), and let the next start try again. Onboarding is not repeated for a user who has a config.
+            is LoadResult.Unreadable -> {
+                savesBlocked = true
+                val fresh = freshConfig()
+                publish(
+                    fresh.copy(prefs = fresh.prefs.copy(onboardingDone = true)),
+                    "Your layout file couldn't be read right now (${result.reason}), so Ghostdeck started with defaults. " +
+                        "Your saved layout was left untouched, and changes made now are not saved. Restart Ghostdeck to try again.",
+                )
+            }
         }
     }
 
@@ -80,7 +89,7 @@ class HomeViewModel(
         config = next
         BadgeCounts.wanted = next.prefs.badges
         var problem = issue
-        if (save) runCatching { store.save(next) }.onFailure { problem = listOfNotNull(problem, "Your layout couldn't be saved: ${it.message}").joinToString(" ") }
+        if (save && !savesBlocked) runCatching { store.save(next) }.onFailure { problem = listOfNotNull(problem, "Your layout couldn't be saved: ${it.message}").joinToString(" ") }
         _state.update {
             it.copy(
                 layout = next.activeDeck().layout, prefs = next.prefs, loaded = true, badges = gated(next.prefs.badges, badgeCounts.value), loadIssue = problem ?: it.loadIssue,

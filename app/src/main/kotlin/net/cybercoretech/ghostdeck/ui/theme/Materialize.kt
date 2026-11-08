@@ -35,7 +35,7 @@ fun materializeProgress(visible: Boolean, reduceMotion: Boolean): State<Float> {
     return anim.asState()
 }
 
-/** How far the tile has materialized, 0..1. Exposed through semantics for tests. */
+/** How far the tile has materialized, 0..1. Only published when [LocalMotionProbe] is on (tests). */
 internal val MaterializedProgressKey = SemanticsPropertyKey<Float>("MaterializedProgress")
 private var SemanticsPropertyReceiver.materializedProgress by MaterializedProgressKey
 
@@ -43,8 +43,9 @@ private var SemanticsPropertyReceiver.materializedProgress by MaterializedProgre
 fun Modifier.materialize(visible: Boolean, reduceMotion: Boolean): Modifier = composed {
     val progress = materializeProgress(visible, reduceMotion)
     val blurPx = with(LocalDensity.current) { START_BLUR_DP.dp.toPx() }
-    // Observable by tests (alpha itself is not in the semantics tree).
-    Modifier.semantics { materializedProgress = progress.value }.graphicsLayer {
+    val probe = LocalMotionProbe.current
+    // Observable by tests (alpha itself is not in the semantics tree); never read per frame in production.
+    Modifier.then(if (probe) Modifier.semantics { materializedProgress = progress.value } else Modifier).graphicsLayer {
         val p = progress.value
         val s = START_SCALE + (1f - START_SCALE) * p
         scaleX = s

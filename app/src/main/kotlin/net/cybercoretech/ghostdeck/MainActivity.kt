@@ -54,11 +54,26 @@ import net.cybercoretech.ghostdeck.platform.expandNotificationShade
 import net.cybercoretech.ghostdeck.settings.HomeSettingsHost
 import net.cybercoretech.ghostdeck.settings.LabsUnlock
 import net.cybercoretech.ghostdeck.settings.SettingsScreen
+import androidx.compose.ui.semantics.semantics
 import net.cybercoretech.ghostdeck.settings.diagnosticsText
+import net.cybercoretech.ghostdeck.ui.theme.LocalMotionProbe
 import net.cybercoretech.ghostdeck.ui.theme.LocalMotionPolicy
 import net.cybercoretech.ghostdeck.ui.theme.rememberMotionPolicy
 import net.cybercoretech.ghostdeck.ui.theme.rememberThemePack
 import net.cybercoretech.ghostdeck.ui.theme.tokensFor
+
+/** Shown until the config has been read: the pack's ground colour, so nothing flashes. */
+@androidx.compose.runtime.Composable
+internal fun LoadingBox(ground: androidx.compose.ui.graphics.Color) {
+    val probe = LocalMotionProbe.current
+    Box(
+        Modifier.fillMaxSize().background(ground).testTag("loading-box")
+            .then(if (probe) Modifier.semantics { loadingGround = ground } else Modifier),
+    )
+}
+
+internal val LoadingGroundKey = androidx.compose.ui.semantics.SemanticsPropertyKey<androidx.compose.ui.graphics.Color>("LoadingGround")
+private var androidx.compose.ui.semantics.SemanticsPropertyReceiver.loadingGround by LoadingGroundKey
 
 class MainActivity : ComponentActivity() {
     private val _homePresses = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
@@ -211,7 +226,7 @@ class MainActivity : ComponentActivity() {
             LaunchedEffect(darkBarIcons) { applyBarStyle(darkBarIcons) }
             // One live motion policy for the whole tree: nested GhostdeckThemes reuse it instead of registering their own.
             CompositionLocalProvider(LocalMotionPolicy provides rememberMotionPolicy()) { when {
-                !state.loaded -> Box(Modifier.fillMaxSize().background(tokens.ground).testTag("loading-box"))
+                !state.loaded -> LoadingBox(tokens.ground)
                 !state.prefs.onboardingDone -> OnboardingScreen(
                     pack = pack,
                     onSetAsHome = { if (!homeRole.request(roleRequest)) finishOnboarding() },
