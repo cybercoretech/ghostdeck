@@ -12,6 +12,16 @@ class LabsUnlock(private val clock: () -> Long) {
     private val taps = ArrayDeque<Long>()
     private var holdStart: Long? = null
     private var unlocked = false
+    private var cancelTimer: (() -> Unit)? = null
+
+    /**
+     * Runs [action] after the delay and returns a cancel function. Set by the host (a main-thread handler), so
+     * a single Volume Down press held for 2 s unlocks even when no key-repeat events arrive.
+     */
+    var scheduler: (delayMs: Long, action: () -> Unit) -> () -> Unit = { _, _ -> {} }
+
+    /** Called when the hold timer, rather than a key event, completes the unlock. */
+    var onHoldUnlocked: () -> Unit = {}
 
     fun onVersionTap(): Boolean {
         val now = clock()
@@ -24,14 +34,21 @@ class LabsUnlock(private val clock: () -> Long) {
     fun onVolumeDown(down: Boolean): Boolean {
         if (!down) {
             holdStart = null
+            cancelTimer?.invoke()
+            cancelTimer = null
             return false
         }
         val now = clock()
-        val start = holdStart ?: now.also { holdStart = it }
+        val start = holdStart ?: now.also {
+            holdStart = it
+            cancelTimer = scheduler(HOLD_MS) { if (holdStart != null && unlock()) onHoldUnlocked() }
+        }
         return if (now - start >= HOLD_MS) unlock() else false
     }
 
     fun lock() {
+        cancelTimer?.invoke()
+        cancelTimer = null
         unlocked = false
         taps.clear()
         holdStart = null
@@ -40,6 +57,7 @@ class LabsUnlock(private val clock: () -> Long) {
     private fun unlock(): Boolean {
         taps.clear()
         holdStart = null
+        cancelTimer = null
         if (unlocked) return false
         unlocked = true
         return true

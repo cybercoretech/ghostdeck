@@ -13,6 +13,7 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -138,6 +139,26 @@ class SettingsScreenTest {
             .forEach { rule.onNodeWithTag("theme-$it").performScrollTo().assertIsDisplayed() }
         click("theme-terminal-ghost-alpha")
         assertEquals("terminal-ghost-alpha", prefs.themePack)
+    }
+
+    @Test fun stepperButtonsHaveContextualLabels() {
+        show()
+        listOf("grid columns", "grid rows", "dock slots").forEach {
+            rule.onNodeWithContentDescription("Decrease $it").performScrollTo().assertIsDisplayed()
+            rule.onNodeWithContentDescription("Increase $it").performScrollTo().assertIsDisplayed()
+        }
+        // The label and its value are one TalkBack stop.
+        rule.onNodeWithContentDescription("Grid columns, 5").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithContentDescription("Increase grid columns").performClick()
+        rule.onNodeWithContentDescription("Grid columns, 6").assertExists()
+    }
+
+    @Test fun unhideButtonNamesTheApp() {
+        val maps = AppKey("com.maps", "com.maps.Main", 0)
+        layout = layout.copy(hidden = setOf(maps))
+        show(mapOf(maps to AppEntry(maps, "Maps", ProfileKind.PERSONAL)))
+        rule.onNodeWithContentDescription("Unhide Maps").performScrollTo().assertIsDisplayed().performClick()
+        assertTrue(layout.hidden.isEmpty())
     }
 
     @Test fun fineGridAndSwipeMarksToggles() {

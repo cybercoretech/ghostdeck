@@ -5,6 +5,8 @@ import android.content.ComponentName
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import android.provider.Settings
 import android.view.KeyEvent
@@ -20,6 +22,7 @@ import net.cybercoretech.ghostdeck.badges.BadgeListenerService
 import net.cybercoretech.ghostdeck.edit.setHidden
 import net.cybercoretech.ghostdeck.onboarding.OnboardingScreen
 import net.cybercoretech.ghostdeck.platform.HomeRole
+import net.cybercoretech.ghostdeck.settings.HomeSettingsHost
 import net.cybercoretech.ghostdeck.settings.LabsUnlock
 import net.cybercoretech.ghostdeck.settings.SettingsScreen
 import android.graphics.Color
@@ -63,7 +66,16 @@ class MainActivity : ComponentActivity() {
     }
 
     private val homeRole by lazy { HomeRole(this) }
-    private val labsUnlock = LabsUnlock(SystemClock::elapsedRealtime)
+    private val labsUnlock = LabsUnlock(SystemClock::elapsedRealtime).also { unlock ->
+        val handler = Handler(Looper.getMainLooper())
+        unlock.scheduler = { delay, action ->
+            val r = Runnable(action)
+            handler.postDelayed(r, delay)
+            val cancel: () -> Unit = { handler.removeCallbacks(r) }
+            cancel
+        }
+        unlock.onHoldUnlocked = { if (settingsOpen) unlockLabs() }
+    }
     private var settingsOpen by mutableStateOf(false)
     private var notificationAccess by mutableStateOf(false)
 
@@ -118,6 +130,8 @@ class MainActivity : ComponentActivity() {
     // Volume Down is consumed only while Settings is up: held for 2 s it opens Labs (spec 10a.7).
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
         if (settingsOpen && keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
+            // A fresh press discards any hold left over from a missed key-up.
+            if (event.repeatCount == 0) labsUnlock.onVolumeDown(false)
             if (labsUnlock.onVolumeDown(true)) unlockLabs()
             return true
         }
@@ -158,6 +172,7 @@ class MainActivity : ComponentActivity() {
                     onFinish = ::finishOnboarding,
                 )
                 else -> {
+                    HomeSettingsHost(showSettings = settingsOpen, home = {
                     // Re-create the home tree when the pack changes so every icon is re-requested.
                     key(state.prefs.iconPack) {
                         HomeScreen(
@@ -176,7 +191,7 @@ class MainActivity : ComponentActivity() {
                             onSwipeDown = { expandNotificationShade(this) },
                         )
                     }
-                    if (settingsOpen) {
+                    }, settings = {
                         val iconPacks = remember { container.iconPacks.installed() }
                         SettingsScreen(
                             pack = pack,
@@ -197,7 +212,7 @@ class MainActivity : ComponentActivity() {
                             onExportDiagnostics = { diagnosticsExport.launch("ghostdeck-diagnostics.txt") },
                             onClose = { settingsOpen = false },
                         )
-                    }
+                    })
                 }
             }
         }

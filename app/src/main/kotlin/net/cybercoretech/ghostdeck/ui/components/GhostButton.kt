@@ -12,6 +12,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import net.cybercoretech.ghostdeck.ui.theme.GhostdeckFonts
@@ -25,6 +28,8 @@ fun GhostButton(
     modifier: Modifier = Modifier,
     tag: String? = null,
     filled: Boolean = false,
+    /** What TalkBack announces; the visible label may be a bare symbol. */
+    contentDescription: String? = null,
 ) {
     val tokens = LocalTokens.current
     val shape = RoundedCornerShape(14.dp)
@@ -34,11 +39,13 @@ fun GhostButton(
             .then(if (tag != null) Modifier.testTag(tag) else Modifier)
             .then(if (filled) Modifier.background(tokens.accent, shape) else Modifier)
             .clickable(role = Role.Button, onClick = onClick)
+            .then(if (contentDescription != null) Modifier.semantics { this.contentDescription = contentDescription } else Modifier)
             .padding(horizontal = 20.dp, vertical = 12.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             label,
+            modifier = if (contentDescription != null) Modifier.clearAndSetSemantics {} else Modifier,
             color = if (filled) tokens.ground else tokens.accent,
             fontFamily = GhostdeckFonts.ui,
             fontSize = 15.sp,

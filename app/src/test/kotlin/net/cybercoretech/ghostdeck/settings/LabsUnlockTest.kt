@@ -1,5 +1,6 @@
 package net.cybercoretech.ghostdeck.settings
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -44,6 +45,38 @@ class LabsUnlockTest {
         assertFalse(unlock.onVolumeDown(true))
         now += 1_900
         assertFalse(unlock.onVolumeDown(true))
+    }
+
+    @Test fun singleDownHeldTwoSecondsUnlocksWithoutRepeats() {
+        var scheduledDelay = -1L
+        var scheduled: (() -> Unit)? = null
+        var cancelled = 0
+        var unlockedByTimer = 0
+        unlock.scheduler = { delay, action -> scheduledDelay = delay; scheduled = action; { cancelled++ } }
+        unlock.onHoldUnlocked = { unlockedByTimer++ }
+        // One KEY_DOWN, no repeat events at all.
+        assertFalse(unlock.onVolumeDown(true))
+        assertEquals(2_000L, scheduledDelay)
+        now += 2_000
+        scheduled!!.invoke() // the timer fires while the key is still down
+        assertEquals(1, unlockedByTimer)
+        // Releasing afterwards cancels nothing harmful and does not unlock again.
+        unlock.onVolumeDown(false)
+        assertEquals(1, unlockedByTimer)
+    }
+
+    @Test fun releaseCancelsTheHoldTimer() {
+        var cancelled = 0
+        var fired = 0
+        var scheduled: (() -> Unit)? = null
+        unlock.scheduler = { _, action -> scheduled = action; { cancelled++ } }
+        unlock.onHoldUnlocked = { fired++ }
+        unlock.onVolumeDown(true)
+        unlock.onVolumeDown(false)
+        assertEquals(1, cancelled)
+        // Even a timer that fires late does nothing once the key was released.
+        scheduled!!.invoke()
+        assertEquals(0, fired)
     }
 
     @Test fun lockAgainClears() {

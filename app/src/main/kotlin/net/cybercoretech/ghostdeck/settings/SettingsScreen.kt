@@ -39,6 +39,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import net.cybercoretech.ghostdeck.R
@@ -175,8 +178,9 @@ private fun MainPage(
     if (layout.hidden.isEmpty()) Muted("No hidden apps.")
     layout.hidden.sortedBy { apps[it]?.label?.lowercase() ?: it.packageName }.forEach { key ->
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            BodyText(apps[key]?.label ?: key.packageName, Modifier.weight(1f))
-            GhostButton("Unhide", { onUnhide(key) }, tag = "unhide-${key.packageName}-${key.userSerial}")
+            val name = apps[key]?.label ?: key.packageName
+            BodyText(name, Modifier.weight(1f))
+            GhostButton("Unhide", { onUnhide(key) }, tag = "unhide-${key.packageName}-${key.userSerial}", contentDescription = "Unhide $name")
         }
     }
 
@@ -246,13 +250,14 @@ internal fun ToggleRow(title: String, subtitle: String, checked: Boolean, tag: S
 @Composable
 private fun StepperRow(title: String, value: Int, range: IntRange, tag: String, onChange: (Int) -> Unit) {
     Row(Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp), verticalAlignment = Alignment.CenterVertically) {
-        BodyText(title, Modifier.weight(1f))
-        GhostButton("-", { if (value - 1 in range) onChange(value - 1) }, tag = "$tag-dec")
+        // Label and value are one TalkBack stop: "Grid columns, 5".
+        BodyText(title, Modifier.weight(1f).semantics { contentDescription = "$title, $value" })
+        GhostButton("-", { if (value - 1 in range) onChange(value - 1) }, tag = "$tag-dec", contentDescription = "Decrease ${title.lowercase()}")
         Text(
-            "$value", Modifier.testTag("$tag-value"),
+            "$value", Modifier.testTag("$tag-value").clearAndSetSemantics {},
             color = LocalTokens.current.text, fontFamily = GhostdeckFonts.mono, fontSize = 16.sp,
         )
-        GhostButton("+", { if (value + 1 in range) onChange(value + 1) }, tag = "$tag-inc")
+        GhostButton("+", { if (value + 1 in range) onChange(value + 1) }, tag = "$tag-inc", contentDescription = "Increase ${title.lowercase()}")
     }
 }
 
