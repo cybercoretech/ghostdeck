@@ -5,12 +5,16 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.unit.height
 import androidx.compose.ui.unit.width
@@ -48,6 +52,7 @@ class HomeScreenTest {
     private val ctx: Context = ApplicationProvider.getApplicationContext()
     private val launcher = FakeLauncher()
     private var swipedUp = 0
+    private var swipedDown = 0
 
     private fun key(n: String, user: Long = 0) = AppKey("com.$n", "com.$n.Main", user)
     private fun apps(vararg k: AppKey) = k.associateWith { AppEntry(it, it.packageName.removePrefix("com.").replaceFirstChar(Char::uppercase), ProfileKind.PERSONAL) }
@@ -70,7 +75,7 @@ class HomeScreenTest {
                 homePresses = emptyFlow(),
                 onPageChanged = {},
                 onSwipeUp = { swipedUp++ },
-                onSwipeDown = {},
+                onSwipeDown = { swipedDown++ },
             )
         }
     }
@@ -144,6 +149,31 @@ class HomeScreenTest {
         rule.onNodeWithTag("item-c").performTouchInput { swipeUp() }
         assertEquals("no swipe action: nothing launched", listOf(b), launcher.launched)
         assertEquals("the page gets the swipe", 1, swipedUp)
+    }
+
+    @Test fun swipeDownOnIconWithSwipeActionOpensShade() {
+        val a = key("alpha"); val b = key("beta")
+        show(page(Placed(AppItem("a", a, swipeUp = LaunchApp(b)), cell(0, 0))), apps(a, b))
+        rule.onNodeWithTag("item-a").performTouchInput { swipeDown() }
+        assertEquals("the page gets the downward swipe", 1, swipedDown)
+        assertTrue("the icon's swipe-up action did not run", launcher.launched.isEmpty())
+        assertEquals(0, swipedUp)
+    }
+
+    @Test fun loadIssueShowsBannerAndDismissClears() {
+        var state by mutableStateOf(HomeUiState(Layout(), emptyMap(), emptySet(), loadIssue = "Your layout file couldn't be read. The old file was kept as config.corrupt-1.json."))
+        val pack = ThemeRepository(ctx).load("ghostdeck")
+        rule.setContent {
+            HomeScreen(
+                state = state, pack = pack, launcher = launcher, icons = FakeIcons(), homePresses = emptyFlow(),
+                onPageChanged = {}, onSwipeUp = {}, onSwipeDown = {},
+                onDismissIssue = { state = state.copy(loadIssue = null) },
+            )
+        }
+        rule.onNodeWithTag("load-issue-banner").assertIsDisplayed()
+        rule.onNodeWithText("config.corrupt-1.json", substring = true).assertIsDisplayed()
+        rule.onNodeWithTag("load-issue-dismiss").performClick()
+        rule.onAllNodesWithTag("load-issue-banner").assertCountEquals(0)
     }
 
     @Test fun swipeMarkShownOnlyWhenEnabled() {

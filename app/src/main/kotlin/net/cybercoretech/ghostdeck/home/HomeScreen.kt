@@ -11,11 +11,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -27,6 +31,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
@@ -36,9 +42,12 @@ import net.cybercoretech.ghostdeck.model.Item
 import net.cybercoretech.ghostdeck.model.findItem
 import net.cybercoretech.ghostdeck.platform.AppLauncher
 import net.cybercoretech.ghostdeck.icons.IconProvider
+import net.cybercoretech.ghostdeck.theme.Contrast
 import net.cybercoretech.ghostdeck.theme.ThemePack
 import net.cybercoretech.ghostdeck.ui.theme.AmbientOrbs
+import net.cybercoretech.ghostdeck.ui.theme.GhostdeckFonts
 import net.cybercoretech.ghostdeck.ui.theme.GhostdeckTheme
+import net.cybercoretech.ghostdeck.ui.theme.GlassSurface
 import net.cybercoretech.ghostdeck.ui.theme.LocalMotionPolicy
 import net.cybercoretech.ghostdeck.ui.theme.LocalTokens
 
@@ -59,6 +68,7 @@ fun HomeScreen(
     onSwipeUp: () -> Unit,
     onSwipeDown: () -> Unit,
     onShowShortcuts: (Item) -> Unit = {},
+    onDismissIssue: () -> Unit = {},
 ) {
     GhostdeckTheme(pack) {
         val tokens = LocalTokens.current
@@ -125,8 +135,27 @@ fun HomeScreen(
                 }
                 Dock(state.layout.dock, env)
             }
+            state.loadIssue?.let { LoadIssueBanner(it, onDismissIssue, Modifier.align(Alignment.TopCenter)) }
             (openFolderId?.let { state.layout.findItem(it) } as? FolderItem)?.let { folder ->
                 FolderSheet(folder, env) { openFolderId = null }
+            }
+        }
+    }
+}
+
+/** Shown when the layout file was unreadable (or could not be saved). Stays until dismissed. */
+@Composable
+private fun LoadIssueBanner(message: String, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
+    val tokens = LocalTokens.current
+    GlassSurface(
+        modifier.windowInsetsPadding(WindowInsets.statusBars).padding(12.dp).fillMaxWidth().testTag("load-issue-banner"),
+        shape = RoundedCornerShape(16.dp),
+        alpha = Contrast.sheetAlpha(tokens.glassAlpha, blurAvailable = false),
+    ) {
+        Row(Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(message, Modifier.weight(1f), color = tokens.text, fontFamily = GhostdeckFonts.ui, fontSize = 13.sp)
+            TextButton(onDismiss, Modifier.testTag("load-issue-dismiss")) {
+                Text("Dismiss", color = tokens.accent, fontFamily = GhostdeckFonts.ui)
             }
         }
     }

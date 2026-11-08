@@ -78,6 +78,15 @@ class HomeViewModelTest {
         assertTrue("corrupt file is kept aside", store.file.parentFile!!.listFiles()!!.any { it.name.startsWith("config.corrupt-") })
     }
 
+    @Test fun dismissLoadIssueClearsIt() {
+        store.file.parentFile!!.mkdirs()
+        store.file.writeText("{ not json")
+        val vm = vm()
+        assertTrue(vm.state.value.loadIssue!!.contains("config.corrupt-"))
+        vm.dismissLoadIssue()
+        assertNull(vm.state.value.loadIssue)
+    }
+
     @Test fun packageRemovedUpdatesAndPersists() {
         seed(Layout(pages = listOf(Page(listOf(Placed(AppItem("a", maps), cell(1, 1)))))))
         val vm = vm()

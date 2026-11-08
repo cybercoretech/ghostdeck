@@ -53,11 +53,12 @@ class MainActivity : ComponentActivity() {
             val themes = remember { ThemeRepository(applicationContext) }
             HomeScreen(
                 state = state,
-                pack = themes.load(state.prefs.themePack),
+                pack = remember(state.prefs.themePack) { themes.load(state.prefs.themePack) },
                 launcher = container.launcher,
                 icons = container.icons,
                 homePresses = homePresses,
                 onPageChanged = viewModel::goToPage,
+                onDismissIssue = viewModel::dismissLoadIssue,
                 onSwipeUp = {}, // Command Bar arrives in a later milestone
                 onSwipeDown = { expandNotificationShade(this) },
             )

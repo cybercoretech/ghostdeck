@@ -3,7 +3,8 @@ package net.cybercoretech.ghostdeck.home
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,7 +29,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
@@ -149,13 +152,21 @@ fun AppIcon(
     val thresholdPx = with(LocalDensity.current) { SWIPE_UP_DP.dp.toPx() }
     val swipeModifier = if (swipeUp != null && available) {
         Modifier.pointerInput(swipeUp) {
-            var total = 0f
-            detectVerticalDragGestures(
-                onDragStart = { total = 0f },
-                onDragEnd = { if (total <= -thresholdPx) onSwipeUp(bounds) },
-            ) { change, dy ->
-                total += dy
-                change.consume()
+            // Claims the gesture only once it has moved up by the touch slop; a downward or sideways
+            // drag is left alone so the page (shade, pager) gets it.
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false)
+                var total = 0f
+                var claimed = false
+                while (true) {
+                    val change = awaitPointerEvent(PointerEventPass.Main).changes.firstOrNull { it.id == down.id } ?: break
+                    if (!change.pressed || (!claimed && change.isConsumed)) break
+                    total += change.positionChange().y
+                    if (!claimed && total >= viewConfiguration.touchSlop) break
+                    if (!claimed && total <= -viewConfiguration.touchSlop) claimed = true
+                    if (claimed) change.consume()
+                }
+                if (total <= -thresholdPx) onSwipeUp(bounds)
             }
         }
     } else Modifier

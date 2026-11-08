@@ -46,7 +46,7 @@ class HomeViewModel(
         when (val result = store.load()) {
             is LoadResult.Loaded -> publish(result.config, null)
             LoadResult.Missing -> publish(freshConfig(), null, save = true)
-            is LoadResult.Corrupt -> publish(freshConfig(), "Config was unreadable (${result.reason}); kept as ${result.movedTo.name}", save = true)
+            is LoadResult.Corrupt -> publish(freshConfig(), "Your layout file couldn't be read, so Ghostdeck started fresh. The old file was kept as ${result.movedTo.name}.", save = true)
         }
     }
 
@@ -58,7 +58,7 @@ class HomeViewModel(
     private fun publish(next: GhostdeckConfig, issue: String?, save: Boolean = false) {
         config = next
         var problem = issue
-        if (save) runCatching { store.save(next) }.onFailure { problem = "Could not save: ${it.message}" }
+        if (save) runCatching { store.save(next) }.onFailure { problem = listOfNotNull(problem, "Your layout couldn't be saved: ${it.message}").joinToString(" ") }
         _state.update {
             it.copy(
                 layout = next.activeDeck().layout, prefs = next.prefs, loadIssue = problem ?: it.loadIssue,
@@ -86,6 +86,8 @@ class HomeViewModel(
     }
 
     fun setEditing(on: Boolean) = _state.update { it.copy(editing = on) }
+
+    fun dismissLoadIssue() = _state.update { it.copy(loadIssue = null) }
 
     fun goToPage(i: Int) = _state.update { it.copy(currentPage = i) }
 }
