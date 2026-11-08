@@ -5,6 +5,9 @@
     <!-- Privacy Charter: this APK must never declare android.permission.INTERNET.
          CI (tools/privacy-gate.sh) fails the build if it appears, including via manifest merging. -->
 
+    <!-- Lets LauncherApps list apps of a Private Space profile (API 35+). -->
+    <uses-permission android:name="android.permission.ACCESS_HIDDEN_PROFILES" />
+
     <application
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
