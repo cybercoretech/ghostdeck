@@ -57,6 +57,11 @@ class HomeViewModel(
             is LoadResult.Loaded -> publish(result.config, null)
             LoadResult.Missing -> publish(freshConfig(), null, save = true)
             is LoadResult.Corrupt -> publish(freshConfig(), corruptMessage(result), save = true)
+            // The file is untouched: run on defaults for this session but never write over it at startup, so the next start retries.
+            is LoadResult.Unreadable -> publish(
+                freshConfig(),
+                "Your layout file couldn't be read right now (${result.reason}), so Ghostdeck started with defaults. Your saved layout was left untouched.",
+            )
         }
     }
 

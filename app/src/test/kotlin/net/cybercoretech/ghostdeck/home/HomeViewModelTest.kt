@@ -67,6 +67,15 @@ class HomeViewModelTest {
     private fun saved(): Layout =
         ((store.load() as LoadResult.Loaded).config.decks.single().layout)
 
+    @Test fun unreadableConfigIsNotOverwritten() {
+        store.file.apply { parentFile!!.mkdirs(); mkdir() } // readText() throws IOException
+        val vm = vm()
+        assertTrue(store.file.isDirectory)
+        assertTrue(store.file.parentFile!!.list()!!.none { it.startsWith("config.corrupt-") })
+        assertNotNull(vm.state.value.loadIssue)
+        assertTrue(vm.state.value.loaded)
+    }
+
     @Test fun missingConfigCreatesDefaultAndSaves() {
         val vm = vm()
         val dock = vm.state.value.layout.dock.items

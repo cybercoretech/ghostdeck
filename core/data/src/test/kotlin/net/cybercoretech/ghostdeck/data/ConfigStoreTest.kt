@@ -80,6 +80,36 @@ class ConfigStoreTest {
         assertEquals(LoadResult.Loaded(c), s.load())
     }
 
+    @Test fun saveOverwritesStaleTmp() {
+        val s = store()
+        val c = config()
+        val stale = File(tmp.root, "config.json.tmp")
+        stale.writeText("garbage")
+        s.save(c)
+        assertEquals(LoadResult.Loaded(c), s.load())
+        assertFalse(stale.exists())
+    }
+
+    @Test fun unreadableFileIsLeftInPlace() {
+        val s = store()
+        s.file.mkdir() // readText() on a directory throws IOException
+        val r = s.load()
+        assertTrue("expected Unreadable, got $r", r is LoadResult.Unreadable)
+        assertTrue(s.file.exists())
+        assertTrue(tmp.root.list()!!.none { it.startsWith("config.corrupt-") })
+    }
+
+    @Test fun twoCorruptionsInOneMillisecondKeepBoth() {
+        val s = store()
+        s.file.writeText("{first")
+        val a = (s.load() as LoadResult.Corrupt).movedTo!!
+        s.file.writeText("{second")
+        val b = (s.load() as LoadResult.Corrupt).movedTo!!
+        assertTrue(a != b)
+        assertEquals("{first", a.readText())
+        assertEquals("{second", b.readText())
+    }
+
     private fun assertCorruptAndMoved(s: ConfigStore, raw: String) {
         s.file.writeText(raw)
         val r = s.load()
@@ -105,15 +135,11 @@ class ConfigStoreTest {
     }
 
     @Test fun moveFailureStillReportsCorrupt() {
-        val s = store()
+        val s = ConfigStore(tmp.root, clock = { 1234L }, mover = { _, _ -> throw java.io.IOException("read-only") })
         s.file.writeText("{not json")
-        tmp.root.setWritable(false)
-        try {
-            val r = s.load()
-            assertTrue("expected Corrupt, got $r", r is LoadResult.Corrupt)
-            assertNull("nothing was moved", (r as LoadResult.Corrupt).movedTo)
-        } finally {
-            tmp.root.setWritable(true)
-        }
+        val r = s.load()
+        assertTrue("expected Corrupt, got $r", r is LoadResult.Corrupt)
+        assertNull("nothing was moved", (r as LoadResult.Corrupt).movedTo)
+        assertTrue(s.file.exists())
     }
 }
