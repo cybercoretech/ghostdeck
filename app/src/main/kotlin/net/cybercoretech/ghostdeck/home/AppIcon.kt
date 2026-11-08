@@ -51,6 +51,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import net.cybercoretech.ghostdeck.badges.BadgeCounts
 import net.cybercoretech.ghostdeck.catalog.AppEntry
+import net.cybercoretech.ghostdeck.catalog.ProfileKind
 import net.cybercoretech.ghostdeck.home.edit.DropGeometry
 import net.cybercoretech.ghostdeck.icons.IconProvider
 import net.cybercoretech.ghostdeck.model.AppItem
@@ -78,6 +79,8 @@ private const val DRAGGING_ALPHA = 0.25f
 data class TileEnv(
     val apps: Map<AppKey, AppEntry>,
     val unavailableUsers: Set<Long>,
+    /** Profile kind per user, from catalog snapshots. A missing user has not been read yet. */
+    val profiles: Map<Long, ProfileKind> = emptyMap(),
     val swipeMarks: Boolean,
     /** Labs: outline every grid cell. */
     val gridBounds: Boolean = false,
@@ -95,9 +98,39 @@ data class TileEnv(
     val draggingId: String? = null,
 )
 
+/** How a layout item is drawn, given what the catalog knows about its profile. */
+enum class TileState { Normal, Dimmed, Hidden }
+
+/**
+ * - A locked Private Space hides its items completely (they stay in the layout, their cells stay taken).
+ * - A paused work (or other) profile dims its items and they don't launch.
+ * - A user no snapshot has arrived for yet (cold start) is assumed available: drawn normally.
+ * - A known, available profile without the app (uninstalled, storage unmounted) dims it.
+ */
+fun tileState(userSerial: Long, hasEntry: Boolean, unavailableUsers: Set<Long>, profiles: Map<Long, ProfileKind>): TileState = when {
+    userSerial in unavailableUsers -> if (profiles[userSerial] == ProfileKind.PRIVATE) TileState.Hidden else TileState.Dimmed
+    userSerial !in profiles || hasEntry -> TileState.Normal
+    else -> TileState.Dimmed
+}
+
+fun TileEnv.stateOf(item: Item): TileState = when (item) {
+    is AppItem -> tileState(item.app.userSerial, item.app in apps, unavailableUsers, profiles)
+    is ShortcutItem -> tileState(item.userSerial, hasEntry = true, unavailableUsers, profiles)
+    // A folder whose every child is hidden is hidden too, so its name gives nothing away.
+    is FolderItem -> if (item.children.isNotEmpty() && item.children.all { stateOf(it) == TileState.Hidden }) TileState.Hidden else TileState.Normal
+}
+
+/** The children of [folder] that may be drawn right now. */
+fun TileEnv.visibleChildren(folder: FolderItem): List<Item> = folder.children.filter { stateOf(it) != TileState.Hidden }
+
 /** One home, dock or folder item: icon, label, tap, swipe-up action. [index] staggers the first appearance. */
 @Composable
 fun ItemTile(item: Item, env: TileEnv, iconSize: Dp, showLabel: Boolean, index: Int, modifier: Modifier = Modifier) {
+    // Hidden items keep their cell (nothing is placed over them) but draw nothing and take no input or semantics.
+    if (env.stateOf(item) == TileState.Hidden) {
+        Box(modifier)
+        return
+    }
     val geometry = env.geometry
     if (geometry != null) DisposableEffect(item.id) { onDispose { geometry.items.remove(item.id) } }
     val tracked = modifier
@@ -114,7 +147,7 @@ private fun ItemTileContent(item: Item, env: TileEnv, iconSize: Dp, showLabel: B
     when (item) {
         is AppItem -> {
             val entry = env.apps[item.app]
-            val available = item.app.userSerial !in env.unavailableUsers && entry != null
+            val available = env.stateOf(item) == TileState.Normal
             val label = item.customLabel ?: entry?.label ?: item.app.packageName.substringAfterLast('.')
             AppIcon(
                 id = item.id, label = label, available = available, showLabel = showLabel, index = index, modifier = modifier,
@@ -129,7 +162,7 @@ private fun ItemTileContent(item: Item, env: TileEnv, iconSize: Dp, showLabel: B
             val owner = env.apps.keys.firstOrNull { it.packageName == item.packageName && it.userSerial == item.userSerial }
                 ?: AppKey(item.packageName, "", item.userSerial)
             AppIcon(
-                id = item.id, label = item.label, available = item.userSerial !in env.unavailableUsers,
+                id = item.id, label = item.label, available = env.stateOf(item) == TileState.Normal,
                 showLabel = showLabel, index = index, modifier = modifier,
                 swipeUp = item.swipeUp, showSwipeMark = env.swipeMarks,
                 badge = env.badges.hasCount(item.packageName, item.userSerial),
@@ -141,7 +174,7 @@ private fun ItemTileContent(item: Item, env: TileEnv, iconSize: Dp, showLabel: B
         is FolderItem -> AppIcon(
             id = item.id, label = item.name, available = true, showLabel = showLabel, index = index, modifier = modifier,
             swipeUp = null, showSwipeMark = false,
-            badge = item.children.any {
+            badge = env.visibleChildren(item).any {
                 when (it) {
                     is AppItem -> env.badges.hasCount(it.app.packageName, it.app.userSerial)
                     is ShortcutItem -> env.badges.hasCount(it.packageName, it.userSerial)
@@ -274,7 +307,7 @@ private fun FolderGlyph(folder: FolderItem, size: Dp, env: TileEnv) {
         contentAlignment = Alignment.Center,
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(size * 0.04f)) {
-            folder.children.take(4).chunked(2).forEach { row ->
+            env.visibleChildren(folder).take(4).chunked(2).forEach { row ->
                 Row(horizontalArrangement = Arrangement.spacedBy(size * 0.04f)) {
                     row.forEach { child ->
                         val key = when (child) {

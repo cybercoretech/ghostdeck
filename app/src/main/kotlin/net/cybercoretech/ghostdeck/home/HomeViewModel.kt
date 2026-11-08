@@ -78,7 +78,7 @@ class HomeViewModel(
         _state.update {
             it.copy(
                 layout = next.activeDeck().layout, prefs = next.prefs, loaded = true, badges = gated(next.prefs.badges, badgeCounts.value), loadIssue = problem ?: it.loadIssue,
-                apps = catalogState.entries, unavailableUsers = catalogState.unavailableUsers,
+                apps = catalogState.entries, unavailableUsers = catalogState.unavailableUsers, profiles = catalogState.profiles,
             )
         }
     }
@@ -92,7 +92,7 @@ class HomeViewModel(
         val before = current.activeDeck().layout
         val after = before.reconcile(event, catalogState).resolveStale(catalogState)
         if (after != before) publish(current.updateActiveLayout { after }, null, save = true)
-        else _state.update { it.copy(apps = catalogState.entries, unavailableUsers = catalogState.unavailableUsers) }
+        else _state.update { it.copy(apps = catalogState.entries, unavailableUsers = catalogState.unavailableUsers, profiles = catalogState.profiles) }
     }
 
     /** Applies [f] to the active deck's layout and persists it. */

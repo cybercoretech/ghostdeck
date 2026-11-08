@@ -94,7 +94,7 @@ fun FolderSheet(folder: FolderItem, env: TileEnv, onDismiss: () -> Unit) {
                     folder.name, color = tokens.text, fontFamily = GhostdeckFonts.display,
                     fontWeight = FontWeight.SemiBold, fontSize = 20.sp,
                 )
-                folder.children.chunked(COLUMNS).forEach { row ->
+                env.visibleChildren(folder).chunked(COLUMNS).forEach { row ->
                     Row(Modifier.fillMaxWidth()) {
                         row.forEachIndexed { i, child ->
                             ItemTile(child, sheetEnv, CHILD_ICON, showLabel = true, index = i, modifier = Modifier.weight(1f).height(84.dp))

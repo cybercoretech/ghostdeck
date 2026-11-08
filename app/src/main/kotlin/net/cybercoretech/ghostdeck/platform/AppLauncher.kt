@@ -48,6 +48,9 @@ class AndroidAppLauncher(context: Context) : AppLauncher {
             Log.w(TAG, "$what: activity not found", e)
         } catch (e: IllegalStateException) {
             Log.w(TAG, "$what: not available", e)
+        } catch (e: IllegalArgumentException) {
+            // e.g. a tap on a cold-start item whose activity is gone, before the first catalog snapshot.
+            Log.w(TAG, "$what: unknown component or user", e)
         }
     }
 

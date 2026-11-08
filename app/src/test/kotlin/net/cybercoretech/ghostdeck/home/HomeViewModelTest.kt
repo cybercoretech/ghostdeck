@@ -140,6 +140,7 @@ class HomeViewModelTest {
         catalog.flow.tryEmit(CatalogEvent.Snapshot(10, ProfileKind.PRIVATE, listOf(entry(vault, ProfileKind.PRIVATE))))
         catalog.flow.tryEmit(CatalogEvent.ProfileAvailability(10, false))
         assertEquals(setOf(10L), vm.state.value.unavailableUsers)
+        assertEquals("the UI learns it is Private Space, to hide it", ProfileKind.PRIVATE, vm.state.value.profiles[10L])
         assertEquals(setOf(vault), vm.state.value.layout.allAppKeys())
         assertEquals(setOf(vault), saved().allAppKeys())
         assertTrue(vm.state.value.layout.dock.items.first() is AppItem)

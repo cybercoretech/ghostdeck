@@ -2,6 +2,8 @@ package net.cybercoretech.ghostdeck.home
 
 import android.content.Context
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -68,11 +70,12 @@ class HomeScreenTest {
         unavailable: Set<Long> = emptySet(),
         prefs: Prefs = Prefs(),
         badges: Map<String, Int> = emptyMap(),
+        profiles: Map<Long, ProfileKind> = (apps.keys.map { it.userSerial } + unavailable).associateWith { ProfileKind.PERSONAL },
     ) {
         val pack = ThemeRepository(ctx).load(prefs.themePack)
         rule.setContent {
             HomeScreen(
-                state = HomeUiState(layout, apps, unavailable, badges = badges, prefs = prefs),
+                state = HomeUiState(layout, apps, unavailable, badges = badges, prefs = prefs, profiles = profiles),
                 pack = pack,
                 launcher = launcher,
                 icons = FakeIcons(),
@@ -105,17 +108,47 @@ class HomeScreenTest {
         assertEquals(listOf(maps), launcher.launched)
     }
 
-    @Test fun unavailableProfileItemsRenderDimmedAndDontLaunch() {
+    @Test fun pausedWorkItemsRenderDimmed() {
         val vault = key("vault", user = 10)
         val layout = Layout(
             pages = listOf(Page(listOf(Placed(AppItem("home-v", vault), cell(0, 0))))),
             dock = Dock(listOf(AppItem("dock-v", vault), null, null)),
         )
-        show(layout, apps(vault), unavailable = setOf(10L))
+        show(layout, apps(vault), unavailable = setOf(10L), profiles = mapOf(0L to ProfileKind.PERSONAL, 10L to ProfileKind.WORK))
         rule.onNodeWithText("Vault").assertIsDisplayed().assertIsNotEnabled()
         rule.onNodeWithTag("item-home-v").performClick()
         rule.onNodeWithTag("item-dock-v").assertIsNotEnabled().performClick()
         assertTrue(launcher.launched.isEmpty())
+    }
+
+    @Test fun lockedPrivateItemsAreNotRendered() {
+        val vault = key("vault", user = 11)
+        val bank = key("bank", user = 11)
+        val maps = key("maps")
+        val folder = FolderItem("f", "Mixed", listOf(AppItem("fm", maps), AppItem("fb", bank)))
+        val layout = Layout(
+            pages = listOf(Page(listOf(Placed(AppItem("home-v", vault), cell(0, 0)), Placed(folder, cell(1, 0))))),
+            dock = Dock(listOf(AppItem("dock-v", vault), null, null)),
+        )
+        val entries = apps(maps) + listOf(vault, bank).associateWith {
+            AppEntry(it, it.packageName.removePrefix("com.").replaceFirstChar(Char::uppercase), ProfileKind.PRIVATE)
+        }
+        show(layout, entries, unavailable = setOf(11L), profiles = mapOf(0L to ProfileKind.PERSONAL, 11L to ProfileKind.PRIVATE))
+        rule.onAllNodesWithText("Vault").assertCountEquals(0)
+        rule.onAllNodesWithTag("item-home-v").assertCountEquals(0)
+        rule.onAllNodesWithTag("item-dock-v").assertCountEquals(0)
+        // Folders keep their other children but never show the private one.
+        rule.onNodeWithText("Mixed").performClick()
+        rule.onNodeWithText("Maps").assertIsDisplayed()
+        rule.onAllNodesWithText("Bank").assertCountEquals(0)
+        rule.onAllNodesWithTag("item-fb").assertCountEquals(0)
+    }
+
+    @Test fun itemsRenderNormallyBeforeFirstSnapshot() {
+        val maps = key("maps")
+        show(page(Placed(AppItem("maps", maps), cell(0, 0))), apps = emptyMap(), profiles = emptyMap())
+        rule.onNodeWithTag("item-maps").assertIsEnabled().performClick()
+        assertEquals(listOf(maps), launcher.launched)
     }
 
     @Test fun folderTapOpensSheetWithChildren() {
