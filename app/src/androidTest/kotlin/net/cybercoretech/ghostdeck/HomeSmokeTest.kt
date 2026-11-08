@@ -1,6 +1,8 @@
 package net.cybercoretech.ghostdeck
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotDisplayed
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performTouchInput
@@ -65,5 +67,8 @@ class HomeSmokeTest {
         compose.onNodeWithTag("page-grid").performTouchInput { swipeLeft() }
         compose.waitForIdle()
         compose.onNodeWithTag("item-p1").assertIsDisplayed()
+        // The pager really moved: page 0's tile is off screen (or no longer composed).
+        val p0 = compose.onAllNodesWithTag("item-p0")
+        if (p0.fetchSemanticsNodes().isNotEmpty()) p0[0].assertIsNotDisplayed()
     }
 }

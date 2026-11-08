@@ -63,10 +63,11 @@ android {
 kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) } }
 
 dependencies {
+    val composeBom = platform("androidx.compose:compose-bom:2025.10.00")
     implementation(project(":core:model"))
     implementation(project(":core:data"))
     implementation(project(":interaction:home"))
-    implementation(platform("androidx.compose:compose-bom:2025.10.00"))
+    implementation(composeBom)
     implementation("androidx.compose.material3:material3")
     implementation("androidx.activity:activity-compose:1.11.0")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.4")
@@ -75,11 +76,11 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.16.1")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
-    testImplementation(platform("androidx.compose:compose-bom:2025.10.00"))
+    testImplementation(composeBom)
     testImplementation("androidx.compose.ui:ui-test-junit4")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation("androidx.test:runner:1.7.0")
-    androidTestImplementation(platform("androidx.compose:compose-bom:2025.10.00"))
+    androidTestImplementation(composeBom)
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
 }
