@@ -46,7 +46,12 @@ fun blurAvailable(window: Window): Boolean {
     return wm.isCrossWindowBlurEnabled
 }
 
-/** Cross-window blur for full-screen sheets when [blurAvailable]; otherwise a no-op (use `Contrast.sheetAlpha`). */
-fun applySheetBlur(window: Window, radiusPx: Int) {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && blurAvailable(window)) window.setBackgroundBlurRadius(radiusPx)
+/**
+ * Cross-window blur for full-screen sheets when [blurAvailable]; otherwise a no-op (use `Contrast.sheetAlpha`).
+ * Returns whether the blur was applied, so the caller can pick the matching sheet tint.
+ */
+fun applySheetBlur(window: Window, radiusPx: Int): Boolean {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || !blurAvailable(window)) return false
+    window.setBackgroundBlurRadius(radiusPx)
+    return true
 }

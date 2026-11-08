@@ -1,10 +1,17 @@
 package net.cybercoretech.ghostdeck.ui.theme
 
+import android.app.Application
 import android.content.Context
 import android.content.Intent
 import android.os.PowerManager
 import android.provider.Settings
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.onNodeWithTag
+import net.cybercoretech.ghostdeck.testutil.RobolectricMotion
 import androidx.test.core.app.ApplicationProvider
 import org.robolectric.Shadows.shadowOf
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -85,13 +92,53 @@ class MotionTest {
         assertTrue(seen.last())
     }
 
-    @Test fun orbsAnimateWhenAnimationsOn() {
+    private fun phaseAfter(ms: Long): Float {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val pack = ThemeRepository(context).load(DEFAULT_PACK_ID)
         rule.mainClock.autoAdvance = false // the infinite drift would otherwise keep the test from idling
-        rule.setContent { GhostdeckTheme(pack) { AmbientOrbs() } }
-        rule.mainClock.advanceTimeBy(1_000)
-        assertFalse(orbsStatic(AndroidMotionPolicy(context)))
+        rule.setContent {
+            CompositionLocalProvider(LocalMotionProbe provides true) {
+                GhostdeckTheme(pack) { AmbientOrbs(Modifier.fillMaxSize().testTag("orbs")) }
+            }
+        }
+        rule.mainClock.advanceTimeBy(ms)
+        return rule.onNodeWithTag("orbs").fetchSemanticsNode().config[OrbPhaseKey]
+    }
+
+    @Test fun orbPhaseAdvancesWhenAnimationsOn() {
+        val early = phaseAfter(1_000)
         rule.mainClock.advanceTimeBy(ORB_DRIFT_MS / 2L)
+        val later = rule.onNodeWithTag("orbs").fetchSemanticsNode().config[OrbPhaseKey]
+        assertTrue("phase moved from $early to $later", later > early + 0.2f)
+        assertEquals(true, rule.onNodeWithTag("orbs").fetchSemanticsNode().config[OrbsAnimatingKey])
+    }
+
+    @Test fun productionDoesNotPublishThePerFramePhase() {
+        val pack = ThemeRepository(ApplicationProvider.getApplicationContext<Context>()).load(DEFAULT_PACK_ID)
+        rule.mainClock.autoAdvance = false
+        rule.setContent { GhostdeckTheme(pack) { AmbientOrbs(Modifier.fillMaxSize().testTag("orbs")) } }
+        rule.mainClock.advanceTimeBy(1_000)
+        val config = rule.onNodeWithTag("orbs").fetchSemanticsNode().config
+        assertEquals(true, config[OrbsAnimatingKey])
+        assertEquals(false, config.contains(OrbPhaseKey))
+    }
+
+    @Test fun orbPhaseStaysZeroWhenReduceMotion() {
+        RobolectricMotion.disableAnimations(ApplicationProvider.getApplicationContext<Context>())
+        assertEquals(0f, phaseAfter(ORB_DRIFT_MS / 2L), 0f)
+        assertEquals(false, rule.onNodeWithTag("orbs").fetchSemanticsNode().config[OrbsAnimatingKey])
+    }
+
+    @Test fun nestedThemesShareOneMotionReceiver() {
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        val pack = ThemeRepository(app).load(DEFAULT_PACK_ID)
+        rule.setContent {
+            CompositionLocalProvider(LocalMotionPolicy provides rememberMotionPolicy()) {
+                repeat(5) { GhostdeckTheme(pack) {} }
+            }
+        }
+        rule.waitForIdle()
+        val receivers = shadowOf(app).registeredReceivers.count { it.intentFilter.hasAction(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED) }
+        assertEquals(1, receivers)
     }
 }

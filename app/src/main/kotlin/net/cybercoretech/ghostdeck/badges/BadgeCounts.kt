@@ -17,6 +17,17 @@ object BadgeCounts {
     private val _counts = MutableStateFlow<Map<String, Int>>(emptyMap())
     val counts: StateFlow<Map<String, Int>> = _counts
 
+    /** False while the badges pref is off: the listener then skips all work. Set by the view model. */
+    @get:JvmName("isWanted") @Volatile var wanted: Boolean = true
+        set(value) {
+            val turnedOn = value && !field
+            field = value
+            if (turnedOn) refreshHook?.invoke() // counts were dropped while off: read them again now
+        }
+
+    /** Set by the bound listener service so turning badges on does not wait for the next notification. */
+    @Volatile var refreshHook: (() -> Unit)? = null
+
     fun key(packageName: String, userSerial: Long) = "$packageName/$userSerial"
 
     fun recompute(active: List<BadgeNotification>) {

@@ -21,6 +21,7 @@ import net.cybercoretech.ghostdeck.platform.AndroidAppLauncher
 import net.cybercoretech.ghostdeck.platform.AndroidDefaultApps
 import net.cybercoretech.ghostdeck.platform.AppLauncher
 import net.cybercoretech.ghostdeck.platform.DefaultAppsResolver
+import net.cybercoretech.ghostdeck.ui.theme.ThemeRepository
 
 /** Manual DI: one of each, created lazily. All config access goes through the single-thread [io]. */
 class AppContainer(app: Application) {
@@ -30,6 +31,8 @@ class AppContainer(app: Application) {
     /** Selected icon pack and accent colour, pushed in from the UI state (see MainActivity). */
     @Volatile var iconPack: String? = null
     @Volatile var accentArgb: Int = 0xFFA78BFA.toInt()
+    /** Replaceable so tests can feed the System pack a different dynamic colour scheme. */
+    @Volatile var themes: ThemeRepository = ThemeRepository(app)
     private val baseIcons = AndroidIconProvider(app)
     val iconPacks = IconPackRepository(app)
     val icons: IconProvider = IconPackIconProvider(

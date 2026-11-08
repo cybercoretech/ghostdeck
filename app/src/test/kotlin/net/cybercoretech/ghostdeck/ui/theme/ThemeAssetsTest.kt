@@ -6,6 +6,7 @@ import androidx.test.core.app.ApplicationProvider
 import net.cybercoretech.ghostdeck.theme.Contrast
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -42,5 +43,14 @@ class ThemeAssetsTest {
 
     @Test fun availableIncludesSystemOnApi31() {
         assertEquals("system", repo.available().last().id)
+    }
+
+    @Test fun systemPackPassesContrastOrIsFlagged() {
+        val system = repo.available().last()
+        val measured = Contrast.glassAlpha(rgb(system.roles.getValue("text_primary")), rgb(system.roles.getValue("surface")))
+        val tokens = tokensFor(system)
+        if (measured != null) assertEquals(measured, tokens.glassAlpha, 0f)
+        else assertTrue("a failing pack must be reported through contrastFallback", tokens.contrastFallback)
+        assertEquals(measured == null, tokens.contrastFallback)
     }
 }

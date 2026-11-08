@@ -2,6 +2,7 @@ package net.cybercoretech.ghostdeck.icons
 
 import android.content.ComponentName
 import android.content.Context
+import android.content.res.Resources
 import android.graphics.Canvas
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
@@ -17,6 +18,9 @@ import net.cybercoretech.ghostdeck.model.AppKey
 
 private const val CACHE_ENTRIES = 300
 
+/** After a pack appfilter failed to load (or was empty), wait this long before reading it again. */
+private const val RETRY_AFTER_MS = 5_000L
+
 /**
  * Applies the selected icon pack on top of [base]. With no pack selected it is a pure pass-through.
  * Icons the pack doesn't cover use [base], or, on API 33+, the app's monochrome layer tinted with [accent].
@@ -30,12 +34,17 @@ class IconPackIconProvider(
     private val packProvider: () -> String?,
     private val accent: () -> Int = { 0xFFFFFFFF.toInt() },
     private val fallbackDrawable: (AppKey) -> Drawable? = { null },
-    private val drawableLoader: (pack: String, name: String) -> Drawable? = { pack, name -> loadPackDrawable(context, pack, name) },
+    /** Replaces the default pack drawable lookup (tests). */
+    private val drawableLoader: ((pack: String, name: String) -> Drawable?)? = null,
     private val drawer: (Drawable, size: Int, overscan: Int) -> ImageBitmap = ::drawToBitmap,
+    private val resourcesProvider: (pack: String) -> Resources? = { runCatching { context.packageManager.getResourcesForApplication(it) }.getOrNull() },
+    private val now: () -> Long = System::currentTimeMillis,
 ) : IconProvider {
     private val cache = LruCache<Triple<AppKey, Int, Int>, ImageBitmap>(CACHE_ENTRIES)
     private var activePack: String? = null
     private var mapping: Map<ComponentName, String> = emptyMap()
+    private var packResources: Resources? = null
+    private var retryAt = 0L
 
     /** Every invalidation goes through [base] too, so its generation covers both caches. */
     override val generation: StateFlow<Int> get() = base.generation
@@ -53,7 +62,7 @@ class IconPackIconProvider(
         val pack = packProvider()
         if (pack == null) {
             synchronized(cache) { // back to system icons: forget everything from the old pack
-                if (activePack != null) { cache.evictAll(); activePack = null; mapping = emptyMap() }
+                if (activePack != null) { cache.evictAll(); activePack = null; mapping = emptyMap(); packResources = null }
             }
             return base.icon(key, sizePx)
         }
@@ -63,7 +72,14 @@ class IconPackIconProvider(
             if (pack != activePack) { // pack changed: drop everything rendered for the old one
                 cache.evictAll()
                 activePack = pack
+                packResources = null
+                retryAt = 0L
+                mapping = emptyMap()
+            }
+            // An empty mapping means the load failed (or the pack covers nothing): look again after a pause, not never.
+            if (mapping.isEmpty() && now() >= retryAt) {
                 mapping = repo.load(pack)
+                retryAt = if (mapping.isEmpty()) now() + RETRY_AFTER_MS else 0L
             }
             cache.get(cacheKey)?.let { return it }
         }
@@ -75,8 +91,17 @@ class IconPackIconProvider(
 
     private fun render(pack: String, key: AppKey, size: Int, tint: Int): ImageBitmap? {
         val name = synchronized(cache) { mapping[ComponentName(key.packageName, key.className)] }
-        val packed = name?.let { drawableLoader(pack, it) }
+        val packed = name?.let { loadDrawable(pack, it) }
         return if (packed != null) drawer(packed, size, 0) else monochrome(key, size, tint)
+    }
+
+    private fun loadDrawable(pack: String, name: String): Drawable? {
+        drawableLoader?.let { return it(pack, name) }
+        // The pack's Resources are fetched once per pack, not on every cache miss.
+        val res = synchronized(cache) {
+            packResources ?: resourcesProvider(pack).also { packResources = it }
+        } ?: return null
+        return loadPackDrawable(res, pack, name)
     }
 
     private fun monochrome(key: AppKey, size: Int, tint: Int): ImageBitmap? {
@@ -89,8 +114,7 @@ class IconPackIconProvider(
 }
 
 @Suppress("DiscouragedApi") // icon packs are looked up by name by design
-private fun loadPackDrawable(context: Context, pack: String, name: String): Drawable? = runCatching {
-    val res = context.packageManager.getResourcesForApplication(pack)
+private fun loadPackDrawable(res: Resources, pack: String, name: String): Drawable? = runCatching {
     val id = res.getIdentifier(name, "drawable", pack)
     if (id == 0) null else res.getDrawable(id, null)
 }.getOrNull()

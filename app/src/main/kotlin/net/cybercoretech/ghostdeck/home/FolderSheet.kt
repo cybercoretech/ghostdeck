@@ -5,6 +5,7 @@ import android.content.ContextWrapper
 import android.graphics.Rect
 import android.os.Build
 import android.view.Window
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -20,7 +21,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -29,6 +33,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.util.function.Consumer
 import net.cybercoretech.ghostdeck.model.AppKey
 import net.cybercoretech.ghostdeck.model.FolderItem
 import net.cybercoretech.ghostdeck.model.ShortcutItem
@@ -38,7 +43,6 @@ import net.cybercoretech.ghostdeck.ui.theme.GhostdeckFonts
 import net.cybercoretech.ghostdeck.ui.theme.GlassSurface
 import net.cybercoretech.ghostdeck.ui.theme.LocalTokens
 import net.cybercoretech.ghostdeck.ui.theme.applySheetBlur
-import net.cybercoretech.ghostdeck.ui.theme.blurAvailable
 
 private const val COLUMNS = 4
 private const val SHEET_BLUR_PX = 48
@@ -63,12 +67,27 @@ private class DismissingLauncher(private val inner: AppLauncher, private val dis
 @Composable
 internal fun rememberSheetAlpha(): Float {
     val tokens = LocalTokens.current
-    val window = LocalContext.current.findWindow()
+    val context = LocalContext.current
+    val window = context.findWindow()
+    var blurred by remember(window) { mutableStateOf(false) }
     DisposableEffect(window) {
-        if (window != null) applySheetBlur(window, SHEET_BLUR_PX)
-        onDispose { if (window != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) window.setBackgroundBlurRadius(0) }
+        if (window == null) return@DisposableEffect onDispose {}
+        blurred = applySheetBlur(window, SHEET_BLUR_PX)
+        // Battery saver can switch cross-window blur off (and on) while the sheet is open: follow it.
+        val listener = Consumer<Boolean> { enabled ->
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) window.setBackgroundBlurRadius(if (enabled) SHEET_BLUR_PX else 0)
+            blurred = enabled
+        }
+        val wm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) context.getSystemService(WindowManager::class.java) else null
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) wm?.addCrossWindowBlurEnabledListener(context.mainExecutor, listener)
+        onDispose {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                wm?.removeCrossWindowBlurEnabledListener(listener)
+                window.setBackgroundBlurRadius(0)
+            }
+        }
     }
-    return Contrast.sheetAlpha(tokens.glassAlpha, window != null && blurAvailable(window))
+    return Contrast.sheetAlpha(tokens.glassAlpha, blurred)
 }
 
 /** Full-screen scrim with a glass panel of the folder's children. Blurs the wallpaper where the system allows it. */

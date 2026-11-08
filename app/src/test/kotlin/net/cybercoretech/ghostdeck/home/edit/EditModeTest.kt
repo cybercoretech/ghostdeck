@@ -3,6 +3,8 @@ package net.cybercoretech.ghostdeck.home.edit
 import android.content.Context
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.center
@@ -14,6 +16,7 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeUp
 import androidx.test.core.app.ApplicationProvider
 import kotlinx.coroutines.flow.emptyFlow
 import net.cybercoretech.ghostdeck.catalog.AppEntry
@@ -107,7 +110,7 @@ class EditModeTest {
         show(editing = true)
         rule.onNodeWithTag("edit-add-apps").performClick()
         rule.onNodeWithTag("app-picker").assertIsDisplayed()
-        rule.onNodeWithTag("picker-row-com.alpha").performClick()
+        rule.onNodeWithTag("picker-row-com.alpha-0").performClick()
         val placed = changes.single()(layout).pages[0].placed
         assertEquals("a picked app lands in the first free whole cell", 3, placed.size)
         assertEquals(cell(2, 0), placed.last().cell)
@@ -167,8 +170,8 @@ class EditModeTest {
         rule.onNodeWithTag("edit-done").assertHeightIsAtLeast(48.dp)
         rule.onNodeWithTag("edit-add-apps").assertHeightIsAtLeast(48.dp)
         rule.onNodeWithTag("edit-add-apps").performClick()
-        rule.onNodeWithTag("picker-row-com.alpha").assertHeightIsAtLeast(48.dp)
-        rule.onNodeWithTag("picker-hide-com.alpha").assertHeightIsAtLeast(48.dp)
+        rule.onNodeWithTag("picker-row-com.alpha-0").assertHeightIsAtLeast(48.dp)
+        rule.onNodeWithTag("picker-hide-com.alpha-0").assertHeightIsAtLeast(48.dp)
     }
 
     @Test fun menuRowsAreAtLeast48dp() {
@@ -225,4 +228,125 @@ class EditModeTest {
         rule.onNodeWithTag("item-menu").assertIsDisplayed()
         rule.onNodeWithTag("item-menu-title", useUnmergedTree = true).assertTextEquals("Gmail")
     }
+
+    // ---- Lane B minors ----
+
+    private fun themed(content: @androidx.compose.runtime.Composable () -> Unit) =
+        rule.setContent { net.cybercoretech.ghostdeck.ui.theme.GhostdeckTheme(ThemeRepository(ctx).load("ghostdeck")) { content() } }
+
+    @Test fun swipePickerShowsProfileBadge() {
+        val owner = AppItem("o", key("alpha"))
+        val slack = AppKey("com.slack", "com.slack.Main", 10)
+        val personal = AppKey("com.slack", "com.slack.Main", 0)
+        themed {
+            SwipeActionPicker(
+                owner = owner,
+                apps = listOf(AppEntry(personal, "Slack", ProfileKind.PERSONAL), AppEntry(slack, "Slack", ProfileKind.WORK)),
+                shortcuts = emptyList(), onChoose = {}, onBack = {},
+            )
+        }
+        rule.onNodeWithTag("swipe-app-com.slack-10").assertIsDisplayed()
+        rule.onNodeWithTag("swipe-app-com.slack-0").assertIsDisplayed()
+        rule.onNodeWithText("Slack (Work)").assertIsDisplayed()
+        rule.onNodeWithText("Slack").assertIsDisplayed()
+    }
+
+    @Test fun swipePickerBackControlIsAtLeast48dp() {
+        themed { SwipeActionPicker(AppItem("o", key("alpha")), emptyList(), emptyList(), onChoose = {}, onBack = {}) }
+        rule.onNodeWithTag("swipe-back").assertHeightIsAtLeast(48.dp)
+    }
+
+    @Test fun canUninstallDoesNotBlockMainThread() {
+        show(editing = true)
+        rule.waitUntil(5_000) { launcher.systemAppThreads.size >= 2 }
+        val main = android.os.Looper.getMainLooper().thread
+        assertTrue("isSystemApp ran on ${launcher.systemAppThreads}", launcher.systemAppThreads.none { it === main })
+    }
+
+    @Test fun dropCommitsTheTransformOfItsOwnOutcome() {
+        val session = EditSession(layout, canUninstall = { true })
+        session.geometry.remove = androidx.compose.ui.geometry.Rect(0f, 0f, 100f, 100f)
+        session.start(net.cybercoretech.ghostdeck.edit.DragSource.Existing("a"), layout.findItem("a")!!, Offset(50f, 50f))
+        session.move(Offset(50f, 50f), fine = false, grid = layout.grid)
+        val commit = session.finish()
+        assertTrue(commit.outcome is net.cybercoretech.ghostdeck.edit.DropOutcome.Updated)
+        assertNull(commit.transform(layout).findItem("a"))
+        assertNotNull(commit.transform(layout).findItem("b"))
+    }
+
+    @Test fun dragGhostSnapsLikeTheController() {
+        for (fine in listOf(false, true)) {
+            val session = EditSession(layout, canUninstall = { true })
+            val controller = net.cybercoretech.ghostdeck.edit.EditController(layout) { true }.also { it.fine = fine }
+            session.start(net.cybercoretech.ghostdeck.edit.DragSource.Existing("a"), layout.findItem("a")!!, Offset.Zero)
+            session.move(Offset.Zero, fine, layout.grid)
+            val raw = net.cybercoretech.ghostdeck.model.Cell(3, 5)
+            val (x, y) = controller.snap(raw.x, raw.y)
+            assertEquals(net.cybercoretech.ghostdeck.model.Cell(x, y), session.snapped(raw))
+        }
+    }
+
+    @Test fun swipePickerChoiceIsPersistedByHomeScreen() {
+        show()
+        longPressAndDrag("item-a", null)
+        rule.onNodeWithTag("menu-swipe").performClick()
+        rule.onNodeWithTag("swipe-app-com.beta-0").performClick()
+        val item = changes.single()(layout).findItem("a") as AppItem
+        assertEquals(net.cybercoretech.ghostdeck.model.LaunchApp(key("beta")), item.swipeUp)
+    }
+
+    @Test fun showShortcutsSwipeOpensMenu() {
+        val withSwipe = Layout(pages = listOf(Page(listOf(Placed(AppItem("a", key("alpha"), swipeUp = net.cybercoretech.ghostdeck.model.ShowShortcuts), cell(0, 0))))))
+        show(layout = withSwipe)
+        rule.onNodeWithTag("item-a").performTouchInput { swipeUp() }
+        rule.onNodeWithTag("item-menu").assertIsDisplayed()
+    }
+
+    @Test fun editBarFitsAtDoubleFontScale() {
+        val pack = ThemeRepository(ctx).load("ghostdeck")
+        rule.setContent {
+            val d = androidx.compose.ui.platform.LocalDensity.current
+            androidx.compose.runtime.CompositionLocalProvider(
+                androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(d.density, fontScale = 2f),
+            ) {
+                HomeScreen(
+                    state = HomeUiState(layout, apps, emptySet(), editing = true),
+                    pack = pack, launcher = launcher, icons = FakeIcons(), homePresses = emptyFlow(),
+                    onPageChanged = {}, onSwipeUp = {}, onSwipeDown = {},
+                )
+            }
+        }
+        for (tag in listOf("drop-remove", "drop-uninstall", "edit-settings", "edit-add-apps", "edit-done")) {
+            rule.onNodeWithTag(tag).assertIsDisplayed().assertHeightIsAtLeast(48.dp)
+        }
+    }
+
+    @Test fun doubleTapHideDoesNotReHide() {
+        show(editing = true)
+        rule.onNodeWithTag("edit-add-apps").performClick()
+        rule.onNodeWithTag("picker-hide-com.alpha-0").performClick()
+        rule.onNodeWithTag("picker-hide-com.alpha-0").performClick()
+        // Both taps hit the same render snapshot; each transform must decide on the layout it is applied to.
+        val net = changes.fold(layout) { l, f -> f(l) }
+        assertEquals(2, changes.size)
+        assertTrue("hidden then unhidden: net visible", key("alpha") !in net.hidden)
+    }
+
+    private fun dragAppAndCheckUninstall(system: Boolean) {
+        launcher.systemApp = system
+        show(editing = true)
+        rule.waitUntil(5_000) { launcher.systemAppThreads.size >= 2 }
+        rule.waitForIdle()
+        rule.onNodeWithTag("item-a").performTouchInput { down(center) }
+        rule.mainClock.advanceTimeBy(800)
+        rule.onNodeWithTag("item-a").performTouchInput { moveBy(Offset(0f, 40f)) }
+        rule.onNodeWithTag("item-a").performTouchInput { moveBy(Offset(0f, 40f)) }
+        rule.waitForIdle()
+        if (system) rule.onNodeWithTag("drop-uninstall").assertIsNotEnabled() else rule.onNodeWithTag("drop-uninstall").assertIsEnabled()
+        rule.onNodeWithTag("item-a").performTouchInput { up() }
+    }
+
+    @Test fun uninstallTargetIsDisabledForASystemApp() = dragAppAndCheckUninstall(system = true)
+
+    @Test fun uninstallTargetIsEnabledForAUserApp() = dragAppAndCheckUninstall(system = false)
 }

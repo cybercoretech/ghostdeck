@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.colorspace.ColorSpaces
 import androidx.test.core.app.ApplicationProvider
 import net.cybercoretech.ghostdeck.model.AppKey
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertSame
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -120,5 +121,54 @@ class IconPackIconProviderTest {
     @Test fun baseFallbackIsNotCachedByPack() {
         provider.icon(other, 48); provider.icon(other, 48)
         assertEquals("base owns its own caching, including not caching placeholders", 2, base.calls)
+    }
+
+    @Test fun failedPackLoadIsRetried() {
+        var clock = 0L
+        var attempts = 0
+        val flaky = object : IconPackRepository(context) {
+            override fun load(pack: String): Map<ComponentName, String> {
+                attempts++
+                return if (attempts == 1) emptyMap() else mapOf(ComponentName("com.a", "com.a.Main") to "a_icon")
+            }
+        }
+        val p = IconPackIconProvider(
+            base, flaky, context, packProvider = { pack }, now = { clock },
+            drawableLoader = { pk, n -> loaded += pk to n; ColorDrawable(0) as Drawable },
+            drawer = { _, _, _ -> Bmp(loaded.size + 100) },
+        )
+        assertSame("first load failed: base icon", base.result, p.icon(key, 48))
+        assertSame("still within the pause: not read again", base.result, p.icon(key, 48))
+        assertEquals(1, attempts)
+        clock += 6_000
+        assertEquals("retried and the pack icon is used", 101, p.icon(key, 48).width)
+        assertEquals(2, attempts)
+    }
+
+    @Test fun resourcesAreFetchedOncePerPack() {
+        var fetches = 0
+        val p = IconPackIconProvider(
+            base, repo, context, packProvider = { pack },
+            resourcesProvider = { fetches++; context.resources },
+        )
+        p.icon(key, 48); p.icon(key, 64); p.icon(key, 96)
+        assertEquals(1, fetches)
+    }
+
+    @Test @Config(sdk = [33])
+    fun accentChangeProducesNewMonochromeBitmap() {
+        var accent = 0xFF112233.toInt()
+        var draws = 0
+        val adaptive = android.graphics.drawable.AdaptiveIconDrawable(ColorDrawable(1), ColorDrawable(2), ColorDrawable(3))
+        val p = IconPackIconProvider(
+            base, repo, context, packProvider = { pack }, accent = { accent },
+            fallbackDrawable = { adaptive },
+            drawer = { _, _, _ -> Bmp(200 + ++draws) },
+        )
+        val first = p.icon(other, 48) // not in the pack: the monochrome layer, tinted with the accent
+        assertSame("same accent: served from cache", first, p.icon(other, 48))
+        accent = 0xFF445566.toInt()
+        assertNotSame("a new accent draws again", first, p.icon(other, 48))
+        assertEquals(2, draws)
     }
 }

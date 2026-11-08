@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.key
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
@@ -38,14 +39,17 @@ fun PageGrid(page: Page, grid: GridSize, env: TileEnv, modifier: Modifier = Modi
         val subW = maxWidth / (grid.cols * SUB)
         val subH = maxHeight / (grid.rows * SUB)
         page.placed.forEachIndexed { index, placed ->
-            val c = placed.cell
-            val w = subW * c.spanX
-            val h = subH * c.spanY
-            ItemTile(
-                item = placed.item, env = env, iconSize = minOf(w * ICON_FRACTION, h * ICON_FRACTION, MAX_ICON),
-                showLabel = true, index = index,
-                modifier = Modifier.offset(subW * c.x, subH * c.y).size(w, h),
-            )
+            // Keyed by item id: reordering moves a tile's state with the item, not with the slot.
+            key(placed.item.id) {
+                val c = placed.cell
+                val w = subW * c.spanX
+                val h = subH * c.spanY
+                ItemTile(
+                    item = placed.item, env = env, iconSize = minOf(w * ICON_FRACTION, h * ICON_FRACTION, MAX_ICON),
+                    showLabel = true, index = index,
+                    modifier = Modifier.offset(subW * c.x, subH * c.y).size(w, h),
+                )
+            }
         }
     }
 }

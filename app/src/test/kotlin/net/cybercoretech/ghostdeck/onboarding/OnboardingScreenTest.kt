@@ -2,6 +2,7 @@ package net.cybercoretech.ghostdeck.onboarding
 
 import android.content.Context
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -65,12 +66,17 @@ class OnboardingScreenTest {
         assertEquals(listOf("home-role"), requests)
     }
 
-    @Test fun continueSetsOnboardingDone() {
+    @Test fun continueThenNotNowFinishesOnboarding() {
         show()
         rule.onNodeWithTag("onboarding-continue").performScrollTo().performClick()
         assertFalse(prefs.onboardingDone)
         rule.onNodeWithText("Not now").performClick()
         assertTrue(prefs.onboardingDone)
         assertEquals(emptyList<String>(), requests)
+    }
+
+    @Test fun titleIsAHeading() {
+        show()
+        rule.onNodeWithTag("onboarding-title").assert(androidx.compose.ui.test.SemanticsMatcher.keyIsDefined(androidx.compose.ui.semantics.SemanticsProperties.Heading))
     }
 }

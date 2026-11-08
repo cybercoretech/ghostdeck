@@ -4,7 +4,10 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -32,6 +35,8 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -43,10 +48,10 @@ import net.cybercoretech.ghostdeck.home.ItemTile
 import net.cybercoretech.ghostdeck.home.TileEnv
 import net.cybercoretech.ghostdeck.model.AppItem
 import net.cybercoretech.ghostdeck.model.AppKey
+import net.cybercoretech.ghostdeck.model.Cell
 import net.cybercoretech.ghostdeck.model.GridSize
 import net.cybercoretech.ghostdeck.model.Item
 import net.cybercoretech.ghostdeck.model.Layout
-import net.cybercoretech.ghostdeck.model.SUB
 import net.cybercoretech.ghostdeck.model.Target
 import net.cybercoretech.ghostdeck.ui.theme.GhostdeckFonts
 import net.cybercoretech.ghostdeck.ui.theme.GlassSurface
@@ -98,15 +103,20 @@ class EditSession(layout: Layout, private val canUninstall: (AppKey) -> Boolean)
         valid = controller.hover(zone)
     }
 
-    /** The last finished drop as an edit of whatever layout is current when it is applied. */
-    var lastCommit: (Layout) -> Layout = { it }
-        private set
+    /** A finished drop: what happened, and the edit to apply to whatever layout is current when it is applied. */
+    data class Commit(val outcome: DropOutcome, val transform: (Layout) -> Layout)
 
-    fun finish(): DropOutcome {
-        lastCommit = controller.pendingTransform()
+    fun finish(): Commit {
+        val transform = controller.pendingTransform()
         val outcome = controller.drop()
         clear()
-        return outcome
+        return Commit(outcome, transform)
+    }
+
+    /** Where a drop at raw half-cell [cell] lands: the controller's own snapping, so the ghost never disagrees with the drop. */
+    fun snapped(cell: Cell): Cell {
+        val (x, y) = controller.snap(cell.x, cell.y)
+        return cell.copy(x = x, y = y)
     }
 
     fun cancel() {
@@ -123,6 +133,7 @@ class EditSession(layout: Layout, private val canUninstall: (AppKey) -> Boolean)
 }
 
 /** Top bar of edit mode: the Remove and Uninstall drop targets, "+ Apps" and "Done". */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun EditBar(
     session: EditSession,
@@ -134,20 +145,26 @@ fun EditBar(
     val tokens = LocalTokens.current
     val geometry = session.geometry
     DisposableEffect(geometry) { onDispose { geometry.remove = null; geometry.uninstall = null } }
-    Row(
-        modifier.fillMaxWidth().height(BAR_HEIGHT).padding(horizontal = 12.dp, vertical = 4.dp)
+    // At large font scales the five items outgrow one line: the row grows and wraps instead of clipping.
+    FlowRow(
+        modifier.fillMaxWidth().heightIn(min = BAR_HEIGHT).padding(horizontal = 12.dp, vertical = 4.dp)
             .background(tokens.glass.copy(alpha = tokens.glassAlpha), RoundedCornerShape(18.dp)).padding(horizontal = 4.dp).testTag("edit-bar"),
-        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+        itemVerticalAlignment = Alignment.CenterVertically,
     ) {
-        DropTarget("Remove", "drop-remove", session.zone == DropZone.Remove, enabled = true, session.isDragging) { geometry.remove = it }
-        DropTarget(
-            "Uninstall", "drop-uninstall", session.zone == DropZone.Uninstall,
-            enabled = !session.isDragging || session.uninstallable, session.isDragging,
-        ) { geometry.uninstall = it }
-        Box(Modifier.weight(1f))
-        BarText("Settings", "edit-settings", tokens.muted, onSettings)
-        BarText("+ Apps", "edit-add-apps", tokens.accent, onAddApps)
-        BarText("Done", "edit-done", tokens.text, onDone)
+        // Two groups: at large font scales the second one wraps onto its own line.
+        FlowRow(itemVerticalAlignment = Alignment.CenterVertically) {
+            DropTarget("Remove", "drop-remove", session.zone == DropZone.Remove, enabled = true, session.isDragging) { geometry.remove = it }
+            DropTarget(
+                "Uninstall", "drop-uninstall", session.zone == DropZone.Uninstall,
+                enabled = !session.isDragging || session.uninstallable, session.isDragging,
+            ) { geometry.uninstall = it }
+        }
+        FlowRow(itemVerticalAlignment = Alignment.CenterVertically) {
+            BarText("Settings", "edit-settings", tokens.muted, onSettings)
+            BarText("+ Apps", "edit-add-apps", tokens.accent, onAddApps)
+            BarText("Done", "edit-done", tokens.text, onDone)
+        }
     }
 }
 
@@ -171,12 +188,13 @@ private fun DropTarget(
     val tokens = LocalTokens.current
     val shape = RoundedCornerShape(14.dp)
     GlassSurface(
-        Modifier.padding(start = 4.dp, end = 4.dp).height(40.dp).alpha(if (enabled) 1f else 0.35f).testTag(tag)
+        Modifier.padding(start = 4.dp, end = 4.dp).heightIn(min = MIN_TOUCH).alpha(if (enabled) 1f else 0.35f).testTag(tag)
+            .semantics { if (!enabled) disabled() }
             .onGloballyPositioned { onBounds(it.boundsInRoot()) }
             .then(if (hovered) Modifier.border(BorderStroke(2.dp, tokens.error), shape) else Modifier),
         shape = shape,
     ) {
-        Box(Modifier.fillMaxHeight().padding(horizontal = 10.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.heightIn(min = MIN_TOUCH).padding(horizontal = 10.dp), contentAlignment = Alignment.Center) {
             Text(
                 label, color = if (dragging && enabled) tokens.error else tokens.muted,
                 fontFamily = GhostdeckFonts.ui, fontSize = 13.sp,
@@ -194,8 +212,7 @@ fun DragLayer(session: EditSession, env: TileEnv, grid: GridSize) {
     val ghostPx = with(density) { GHOST_SIZE.toPx() }
     (session.zone as? DropZone.OnTarget)?.let { zone ->
         val t = zone.target as? Target.Grid ?: return@let
-        val (x, y) = if (session.fine) t.cell.x to t.cell.y else Math.floorDiv(t.cell.x, SUB) * SUB to Math.floorDiv(t.cell.y, SUB) * SUB
-        session.geometry.cellRect(t.page, t.cell.copy(x = x, y = y), grid)?.let { r ->
+        session.geometry.cellRect(t.page, session.snapped(t.cell), grid)?.let { r ->
             val color = if (session.valid) tokens.accent else tokens.error
             Box(
                 Modifier.offset { IntOffset(r.left.toInt(), r.top.toInt()) }

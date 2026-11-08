@@ -21,6 +21,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import net.cybercoretech.ghostdeck.R
@@ -49,8 +52,8 @@ fun OnboardingScreen(pack: ThemePack, onSetAsHome: () -> Unit, onFinish: () -> U
         ) {
             if (step == 0) {
                 Text(
-                    stringResource(R.string.charter_title), color = tokens.accent,
-                    fontFamily = GhostdeckFonts.display, fontSize = 28.sp,
+                    stringResource(R.string.charter_title), Modifier.semantics { heading() }.testTag("onboarding-title"),
+                    color = tokens.accent, fontFamily = GhostdeckFonts.display, fontSize = 28.sp,
                 )
                 stringArrayResource(R.array.charter_lines).forEachIndexed { i, line ->
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -61,8 +64,8 @@ fun OnboardingScreen(pack: ThemePack, onSetAsHome: () -> Unit, onFinish: () -> U
                 GhostButton("Continue", { step = 1 }, Modifier.fillMaxWidth(), tag = "onboarding-continue", filled = true)
             } else {
                 Text(
-                    "Make Ghostdeck your home screen", color = tokens.accent,
-                    fontFamily = GhostdeckFonts.display, fontSize = 28.sp,
+                    "Make Ghostdeck your home screen", Modifier.semantics { heading() }.testTag("onboarding-title"),
+                    color = tokens.accent, fontFamily = GhostdeckFonts.display, fontSize = 28.sp,
                 )
                 Text(
                     "Android will ask you to confirm. You can change this any time in system settings.",

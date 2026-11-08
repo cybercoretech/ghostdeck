@@ -33,9 +33,12 @@ class AndroidIconProviderTest {
     private val work = AppKey("com.a", "com.a.Main", 10)
     private var drawable: Drawable? = ColorDrawable(1)
     private val lookups = mutableListOf<AppKey>()
+    private val densities = mutableListOf<Int>()
     private val provider = AndroidIconProvider(
-        source = { lookups += it; drawable },
+        source = { k, density -> lookups += k; densities += density; drawable },
         draw = { d, size -> Stub(size, d) },
+        densityDpi = 420,
+        maxBytes = 3 * 100 * 100 * 4,
     )
 
     @Test fun repeatedCallIsServedFromCache() {
@@ -77,5 +80,20 @@ class AndroidIconProviderTest {
         provider.invalidateFor(CatalogEvent.ProfileAvailability(10, available = false))
         assertSame(before, provider.icon(work, 48))
         assertEquals(gen, provider.generation.value)
+    }
+
+    @Test fun requestsIconAtDeviceDensity() {
+        provider.icon(key, 48)
+        assertEquals(listOf(420), densities)
+    }
+
+    @Test fun evictsByBytes() {
+        // Budget: three 100x100 bitmaps. A fourth pushes the oldest out.
+        val first = provider.icon(AppKey("com.a", "A", 0), 100)
+        provider.icon(AppKey("com.b", "B", 0), 100)
+        provider.icon(AppKey("com.c", "C", 0), 100)
+        provider.icon(AppKey("com.d", "D", 0), 100)
+        assertNotSame("the oldest entry was evicted", first, provider.icon(AppKey("com.a", "A", 0), 100))
+        assertEquals(5, lookups.size)
     }
 }

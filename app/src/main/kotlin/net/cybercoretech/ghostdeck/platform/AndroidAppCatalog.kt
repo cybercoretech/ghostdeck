@@ -11,6 +11,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.UserHandle
 import android.os.UserManager
+import java.util.concurrent.Executor
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -23,7 +24,11 @@ import net.cybercoretech.ghostdeck.catalog.ProfileKind
 import net.cybercoretech.ghostdeck.model.AppKey
 
 /** LauncherApps-backed catalog covering the personal, work and Private Space profiles. */
-class AndroidAppCatalog(context: Context) : AppCatalog {
+class AndroidAppCatalog(
+    context: Context,
+    /** Runs the re-snapshot after a profile unlock: its binder calls must not block the receiver's (main) thread. */
+    private val snapshotExecutor: Executor = Executor { Thread(it, "catalog-snapshot").start() },
+) : AppCatalog {
     private val appContext = context.applicationContext
     private val launcherApps = appContext.getSystemService(LauncherApps::class.java)
     private val userManager = appContext.getSystemService(UserManager::class.java)
@@ -78,7 +83,7 @@ class AndroidAppCatalog(context: Context) : AppCatalog {
                 }
                 trySend(CatalogEvent.ProfileAvailability(userManager.getSerialNumberForUser(user), available))
                 // Apps seen while the profile was locked may be missing or partial: re-read on unlock.
-                if (available) snapshot(user)
+                if (available) snapshotExecutor.execute { snapshot(user) }
             }
         }
         val filter = IntentFilter().apply {

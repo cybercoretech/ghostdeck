@@ -64,36 +64,36 @@ class AppPickerSheetTest {
 
     @Test fun filtersByQueryCaseInsensitive() {
         picker(listOf(entry("alpha"), entry("gamma"), entry("Photos")))
-        rule.onNodeWithTag("picker-row-com.alpha").assertIsDisplayed()
+        rule.onNodeWithTag("picker-row-com.alpha-0").assertIsDisplayed()
         rule.onNodeWithTag("picker-search").performTextInput("GAM")
-        rule.onAllNodesWithTag("picker-row-com.alpha").assertCountEquals(0)
-        rule.onNodeWithTag("picker-row-com.gamma").assertIsDisplayed()
+        rule.onAllNodesWithTag("picker-row-com.alpha-0").assertCountEquals(0)
+        rule.onNodeWithTag("picker-row-com.gamma-0").assertIsDisplayed()
     }
 
     @Test fun hiddenAppsExcludedUnlessToggled() {
         picker(listOf(entry("alpha"), entry("beta")), hidden = setOf(key("beta")))
-        rule.onNodeWithTag("picker-row-com.alpha").assertIsDisplayed()
-        rule.onAllNodesWithTag("picker-row-com.beta").assertCountEquals(0)
+        rule.onNodeWithTag("picker-row-com.alpha-0").assertIsDisplayed()
+        rule.onAllNodesWithTag("picker-row-com.beta-0").assertCountEquals(0)
         rule.onNodeWithTag("picker-show-hidden").performClick()
-        rule.onNodeWithTag("picker-row-com.beta").assertIsDisplayed()
+        rule.onNodeWithTag("picker-row-com.beta-0").assertIsDisplayed()
     }
 
     @Test fun showsProfileBadgeForWorkAndPrivate() {
         picker(listOf(entry("alpha"), entry("slack", ProfileKind.WORK, user = 10), entry("vault", ProfileKind.PRIVATE, user = 11), entry("other", ProfileKind.OTHER, user = 12)))
-        rule.onNodeWithTag("picker-badge-com.slack", useUnmergedTree = true).assertIsDisplayed()
+        rule.onNodeWithTag("picker-badge-com.slack-10", useUnmergedTree = true).assertIsDisplayed()
         rule.onNodeWithText("Work").assertIsDisplayed()
         rule.onNodeWithText("Private").assertIsDisplayed()
-        rule.onAllNodesWithTag("picker-badge-com.alpha", useUnmergedTree = true).assertCountEquals(0)
-        rule.onAllNodesWithTag("picker-badge-com.other", useUnmergedTree = true).assertCountEquals(0)
+        rule.onAllNodesWithTag("picker-badge-com.alpha-0", useUnmergedTree = true).assertCountEquals(0)
+        rule.onAllNodesWithTag("picker-badge-com.other-12", useUnmergedTree = true).assertCountEquals(0)
     }
 
     @Test fun tapPicksAndHideButtonToggles() {
         val picked = mutableListOf<AppKey>()
         val toggled = mutableListOf<AppKey>()
         picker(listOf(entry("alpha")), picked = picked, toggled = toggled)
-        rule.onNodeWithTag("picker-row-com.alpha").performClick()
+        rule.onNodeWithTag("picker-row-com.alpha-0").performClick()
         assertEquals(listOf(key("alpha")), picked)
-        rule.onNodeWithTag("picker-hide-com.alpha").performClick()
+        rule.onNodeWithTag("picker-hide-com.alpha-0").performClick()
         assertEquals(listOf(key("alpha")), toggled)
     }
 
@@ -118,7 +118,7 @@ class AppPickerSheetTest {
         }
         fun swipeOf() = (layout.findItem("chrome") as AppItem).swipeUp
 
-        rule.onNodeWithTag("swipe-app-com.maps").performClick()
+        rule.onNodeWithTag("swipe-app-com.maps-0").performClick()
         assertEquals(LaunchApp(key("maps")), swipeOf())
         rule.onNodeWithTag("swipe-shortcut-new-tab").performClick()
         assertEquals(LaunchShortcut("com.chrome", "new-tab", 0), swipeOf())
@@ -128,5 +128,13 @@ class AppPickerSheetTest {
         assertNull(swipeOf())
         assertNull(chosen)
         assertEquals(4, applied)
+    }
+
+    @Test fun sameAppInTwoProfilesHasDistinctRows() {
+        picker(listOf(entry("chrome"), entry("chrome", ProfileKind.WORK, user = 10)))
+        rule.onNodeWithTag("picker-row-com.chrome-0").assertIsDisplayed()
+        rule.onNodeWithTag("picker-row-com.chrome-10").assertIsDisplayed()
+        rule.onNodeWithTag("picker-badge-com.chrome-10", useUnmergedTree = true).assertIsDisplayed()
+        rule.onAllNodesWithTag("picker-badge-com.chrome-0", useUnmergedTree = true).assertCountEquals(0)
     }
 }

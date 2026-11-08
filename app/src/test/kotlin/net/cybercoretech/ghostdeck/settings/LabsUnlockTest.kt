@@ -86,4 +86,33 @@ class LabsUnlockTest {
         unlock.lock()
         assertTrue(tapSeven(gapMs = 100))
     }
+
+    @Test fun cancelHoldDoesNotSpendTheUnlock() {
+        var cancelled = 0
+        var fired = 0
+        var scheduled: (() -> Unit)? = null
+        unlock.scheduler = { _, action -> scheduled = action; { cancelled++ } }
+        unlock.onHoldUnlocked = { fired++ }
+        unlock.onVolumeDown(true)
+        unlock.cancelHold()
+        assertEquals(1, cancelled)
+        now += 2_000
+        scheduled!!.invoke() // a timer that outlived Settings does nothing
+        assertEquals(0, fired)
+        // The unlock is still available for a later hold.
+        unlock.onVolumeDown(true)
+        now += 2_000
+        scheduled!!.invoke()
+        assertEquals(1, fired)
+    }
+
+    @Test fun alreadyUnlockedFromPrefsDoesNotUnlockAgain() {
+        val persisted = LabsUnlock(initiallyUnlocked = true) { now }
+        assertFalse(persisted.onVersionTap())
+        repeat(7) { persisted.onVersionTap(); now += 100 }
+        assertFalse(persisted.onVersionTap())
+        val late = LabsUnlock { now }
+        late.syncUnlocked(true)
+        repeat(7) { assertFalse(late.onVersionTap()) }
+    }
 }

@@ -1,9 +1,13 @@
 package net.cybercoretech.ghostdeck.home
 
 import android.app.WallpaperManager
+import android.content.Context
+import android.os.IBinder
+import android.view.View
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,12 +20,14 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -37,6 +43,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.flow.Flow
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.produceState
@@ -60,6 +67,7 @@ import net.cybercoretech.ghostdeck.home.edit.editGestures
 import net.cybercoretech.ghostdeck.model.AppItem
 import net.cybercoretech.ghostdeck.model.AppKey
 import net.cybercoretech.ghostdeck.model.ItemIds
+import net.cybercoretech.ghostdeck.model.allAppKeys
 import net.cybercoretech.ghostdeck.model.Layout
 import net.cybercoretech.ghostdeck.model.LayoutResult
 import net.cybercoretech.ghostdeck.model.Page
@@ -76,6 +84,7 @@ import net.cybercoretech.ghostdeck.theme.Contrast
 import net.cybercoretech.ghostdeck.theme.ThemePack
 import net.cybercoretech.ghostdeck.ui.theme.AmbientOrbs
 import net.cybercoretech.ghostdeck.ui.theme.GhostdeckFonts
+import net.cybercoretech.ghostdeck.ui.theme.GhostdeckTokens
 import net.cybercoretech.ghostdeck.ui.theme.GhostdeckTheme
 import net.cybercoretech.ghostdeck.ui.theme.GlassSurface
 import net.cybercoretech.ghostdeck.ui.theme.LocalMotionPolicy
@@ -109,6 +118,10 @@ fun HomeScreen(
     /** Edits are transforms applied to the current layout, never snapshots, so concurrent catalog changes survive. */
     onLayoutChange: ((Layout) -> Layout) -> Unit = {},
     onOpenSettings: () -> Unit = {},
+    /** Where page positions are sent for the wallpaper parallax; defaults to the system WallpaperManager. */
+    wallpaperOffsets: WallpaperOffsets? = null,
+    /** Test hook: called each time a tile composes (recomposition counting). */
+    onTileComposed: ((String) -> Unit)? = null,
 ) {
     GhostdeckTheme(pack) {
         val tokens = LocalTokens.current
@@ -119,17 +132,28 @@ fun HomeScreen(
         var showPicker by remember { mutableStateOf(false) }
         var rootWidth by remember { mutableIntStateOf(0) }
 
-        val systemApps = remember(launcher) { HashMap<AppKey, Boolean>() }
-        val canUninstall = remember(launcher) { { key: AppKey -> !systemApps.getOrPut(key) { launcher.isSystemApp(key) } } }
+        // isSystemApp is a binder call: it is answered from a cache that fills off the main thread when editing starts.
+        // Until an app is known it counts as not uninstallable (the safe answer).
+        val systemApps = remember(launcher) { ConcurrentHashMap<AppKey, Boolean>() }
+        var systemAppsVersion by remember(launcher) { mutableIntStateOf(0) }
+        val canUninstall = remember(launcher) { { key: AppKey -> systemAppsVersion >= 0 && systemApps[key] == false } }
         val session = remember(canUninstall) { EditSession(state.layout, canUninstall) }
+        val layoutAppKeys = remember(state.layout) { state.layout.allAppKeys() }
+        LaunchedEffect(launcher, layoutAppKeys, state.editing, session.isDragging) {
+            if (!state.editing && !session.isDragging) return@LaunchedEffect
+            val missing = layoutAppKeys.filter { !systemApps.containsKey(it) }
+            if (missing.isEmpty()) return@LaunchedEffect
+            withContext(Dispatchers.Default) { missing.forEach { systemApps[it] = launcher.isSystemApp(it) } }
+            systemAppsVersion++
+        }
         LaunchedEffect(state.layout, session.isDragging) { session.sync(state.layout) }
         // While dragging, one extra empty page at the end is a drop target for a new page.
         val pageCount = layoutPageCount + if (session.isDragging) 1 else 0
         val pagerState = rememberPagerState(initialPage = state.currentPage.coerceIn(0, pageCount - 1)) { pageCount }
 
-        fun handle(outcome: DropOutcome) {
-            when (outcome) {
-                is DropOutcome.Updated -> onLayoutChange(session.lastCommit)
+        fun handle(commit: EditSession.Commit) {
+            when (val outcome = commit.outcome) {
+                is DropOutcome.Updated -> onLayoutChange(commit.transform)
                 is DropOutcome.UninstallRequested -> launcher.uninstall(outcome.key)
                 is DropOutcome.Rejected, DropOutcome.Cancelled -> Unit
             }
@@ -200,25 +224,33 @@ fun HomeScreen(
 
         val context = LocalContext.current
         val view = LocalView.current
-        LaunchedEffect(layoutPageCount) {
+        val sender = remember(wallpaperOffsets, context) { wallpaperOffsets ?: SystemWallpaperOffsets(context) }
+        // The window token only exists once the view is attached: re-send the offset on attach.
+        val attached = rememberAttached(view)
+        LaunchedEffect(layoutPageCount, attached, sender) {
+            if (!attached) return@LaunchedEffect
             snapshotFlow { pagerState.currentPage + pagerState.currentPageOffsetFraction }.collect { position ->
-                runCatching {
-                    val token = view.windowToken ?: return@runCatching
-                    val wallpaper = WallpaperManager.getInstance(context)
-                    if (layoutPageCount > 1) {
-                        wallpaper.setWallpaperOffsetSteps(1f / (layoutPageCount - 1), 0f)
-                        wallpaper.setWallpaperOffsets(token, (position / (layoutPageCount - 1)).coerceIn(0f, 1f), 0f)
-                    } else wallpaper.setWallpaperOffsets(token, 0f, 0f)
-                }
+                val token = view.windowToken ?: return@collect
+                sender.send(token, position, layoutPageCount)
             }
         }
 
-        val env = TileEnv(
-            apps = state.apps, unavailableUsers = state.unavailableUsers, profiles = state.profiles, swipeMarks = state.prefs.swipeMarks, gridBounds = state.prefs.debugGridBounds, badges = state.badges,
-            launcher = launcher, icons = icons,
-            openFolder = { openFolderId = it.id }, showShortcuts = { menu = MenuTarget(it.id) },
-            geometry = session.geometry, draggingId = session.dragItem?.id,
-        )
+        // Tiles that have appeared once do not materialize again when their page is revisited.
+        val shownTiles = remember { HashSet<String>() }
+        // Remembered on its inputs: an unrelated recomposition (page change, edit chrome) must not recompose every tile.
+        val draggingId = session.dragItem?.id
+        val env = remember(
+            state.apps, state.unavailableUsers, state.profiles, state.prefs.swipeMarks, state.prefs.debugGridBounds, state.badges,
+            launcher, icons, session, draggingId, shownTiles, onTileComposed,
+        ) {
+            TileEnv(
+                apps = state.apps, unavailableUsers = state.unavailableUsers, profiles = state.profiles, swipeMarks = state.prefs.swipeMarks, gridBounds = state.prefs.debugGridBounds, badges = state.badges,
+                launcher = launcher, icons = icons,
+                openFolder = { openFolderId = it.id }, showShortcuts = { menu = MenuTarget(it.id) },
+                geometry = session.geometry, draggingId = draggingId,
+                shownTiles = shownTiles, onTileComposed = onTileComposed,
+            )
+        }
         val thresholdPx = with(LocalDensity.current) { PAGE_SWIPE_DP.dp.toPx() }
         Box(
             Modifier.fillMaxSize().onSizeChanged { rootWidth = it.width }.editGestures(session, callbacks).pointerInput(onSwipeUp, onSwipeDown) {
@@ -241,23 +273,14 @@ fun HomeScreen(
                     val shown = state.layout.pages.getOrNull(page) ?: Page().takeIf { page == layoutPageCount }
                     shown?.let { PageGrid(it, state.layout.grid, env, pageIndex = page) }
                 }
-                if (pageCount > 1) {
-                    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center) {
-                        repeat(pageCount) { i ->
-                            val color = if (i == pagerState.currentPage) tokens.text else tokens.muted.copy(alpha = 0.5f)
-                            // A dark ring keeps the dots visible on light wallpapers.
-                            Box(
-                                Modifier.padding(2.dp).size(8.dp).background(HomeShadowColor.copy(alpha = 0.35f), CircleShape)
-                                    .padding(1.dp).background(color, CircleShape),
-                            )
-                        }
-                    }
-                }
+                if (pageCount > 1) PageDots(pagerState, pageCount, tokens)
                 Dock(state.layout.dock, env)
             }
             state.loadIssue?.let { LoadIssueBanner(it, onDismissIssue, Modifier.align(Alignment.TopCenter)) }
             (openFolderId?.let { state.layout.findItem(it) } as? FolderItem)?.let { folder ->
-                FolderSheet(folder, env) { openFolderId = null }
+                // When its profile locks and every child goes hidden, the sheet must not stay up empty.
+                if (env.visibleChildren(folder).isEmpty()) LaunchedEffect(folder.id) { openFolderId = null }
+                else FolderSheet(folder, env) { openFolderId = null }
             }
             menu?.let { target ->
                 val item = state.layout.findItem(target.itemId)
@@ -282,10 +305,8 @@ fun HomeScreen(
                         onLayoutChange { it.placeFirstFree(item) }
                         showPicker = false
                     },
-                    onToggleHidden = { key ->
-                        val hide = key !in state.layout.hidden
-                        onLayoutChange { it.setHidden(key, hide) }
-                    },
+                    // Decided inside the transform, on the layout that is current when it runs.
+                    onToggleHidden = { key -> onLayoutChange { l -> l.setHidden(key, key !in l.hidden) } },
                     onDismiss = { showPicker = false },
                 )
             }
@@ -322,7 +343,7 @@ private fun ItemMenuHost(
     dragging: Boolean,
     fineByDefault: Boolean,
     onLayoutChange: ((Layout) -> Layout) -> Unit,
-    onOutcome: (DropOutcome) -> Unit,
+    onOutcome: (EditSession.Commit) -> Unit,
     onClose: () -> Unit,
     onStartEditing: () -> Unit,
 ) {
@@ -366,4 +387,55 @@ private fun ItemMenuHost(
         onSwipeAction = { action -> onLayoutChange { (it.setSwipeUp(item.id, action) as? LayoutResult.Ok)?.layout ?: it } },
         onDismiss = onClose,
     )
+}
+
+/** The page indicator. Reads the pager position here, so a page change recomposes only the dots. */
+@Composable
+private fun PageDots(pagerState: PagerState, count: Int, tokens: GhostdeckTokens) {
+    val current = pagerState.currentPage
+    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.Center) {
+        repeat(count) { i ->
+            val color = if (i == current) tokens.text else tokens.muted.copy(alpha = 0.5f)
+            // A dark ring keeps the dots visible on light wallpapers.
+            Box(
+                Modifier.padding(2.dp).size(8.dp).background(HomeShadowColor.copy(alpha = 0.35f), CircleShape)
+                    .padding(1.dp).background(color, CircleShape),
+            )
+        }
+    }
+}
+
+/** Wallpaper offset (0..1) for a pager [position] over [pageCount] pages. */
+internal fun wallpaperOffset(position: Float, pageCount: Int): Float =
+    if (pageCount <= 1) 0f else (position / (pageCount - 1)).coerceIn(0f, 1f)
+
+/** Receives the wallpaper parallax position; tests substitute a fake. */
+fun interface WallpaperOffsets {
+    fun send(token: IBinder, position: Float, pageCount: Int)
+}
+
+private class SystemWallpaperOffsets(private val context: Context) : WallpaperOffsets {
+    override fun send(token: IBinder, position: Float, pageCount: Int) {
+        runCatching {
+            val wallpaper = WallpaperManager.getInstance(context)
+            if (pageCount > 1) wallpaper.setWallpaperOffsetSteps(1f / (pageCount - 1), 0f)
+            wallpaper.setWallpaperOffsets(token, wallpaperOffset(position, pageCount), 0f)
+        }
+    }
+}
+
+/** Whether [view] is attached to a window (and so has a window token). */
+@Composable
+private fun rememberAttached(view: View): Boolean {
+    var attached by remember(view) { mutableStateOf(view.isAttachedToWindow) }
+    DisposableEffect(view) {
+        val listener = object : View.OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(v: View) { attached = true }
+            override fun onViewDetachedFromWindow(v: View) { attached = false }
+        }
+        view.addOnAttachStateChangeListener(listener)
+        attached = view.isAttachedToWindow
+        onDispose { view.removeOnAttachStateChangeListener(listener) }
+    }
+    return attached
 }

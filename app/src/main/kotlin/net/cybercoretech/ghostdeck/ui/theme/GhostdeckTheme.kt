@@ -9,18 +9,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.text.TextStyle
 import net.cybercoretech.ghostdeck.theme.ThemePack
 
-/** Provides the tokens for [pack], the live motion policy, and the bundled type (Inter for UI text). */
-@Composable
-fun GhostdeckTheme(pack: ThemePack, content: @Composable () -> Unit) {
-    val tokens = remember(pack) { tokensFor(pack) }
-    val policy = rememberMotionPolicy()
-    val colors = darkColorScheme(
-        background = tokens.ground, surface = tokens.glass, primary = tokens.accent, secondary = tokens.accentAlt,
-        onBackground = tokens.text, onSurface = tokens.text, onSurfaceVariant = tokens.muted, error = tokens.error,
-        outline = tokens.border,
-    )
+/** The type scale with the bundled fonts applied (Inter for UI text, Space Grotesk for display). Built once. */
+private val GhostdeckTypography: Typography by lazy {
     val base = Typography()
-    val typography = Typography(
+    Typography(
         displayLarge = base.displayLarge.withFamily(GhostdeckFonts.display),
         displayMedium = base.displayMedium.withFamily(GhostdeckFonts.display),
         displaySmall = base.displaySmall.withFamily(GhostdeckFonts.display),
@@ -37,8 +29,26 @@ fun GhostdeckTheme(pack: ThemePack, content: @Composable () -> Unit) {
         labelMedium = base.labelMedium.withFamily(GhostdeckFonts.ui),
         labelSmall = base.labelSmall.withFamily(GhostdeckFonts.ui),
     )
+}
+
+/**
+ * Provides the tokens for [pack], the motion policy, and the bundled type. A policy provided further up
+ * (via [LocalMotionPolicy], as the activity does) is reused, so nested themes register no receivers of their own.
+ */
+@Composable
+fun GhostdeckTheme(pack: ThemePack, content: @Composable () -> Unit) {
+    val tokens = remember(pack) { tokensFor(pack) }
+    val inherited = LocalMotionPolicy.current
+    val policy = if (inherited === UnprovidedMotionPolicy) rememberMotionPolicy() else inherited
+    val colors = remember(tokens) {
+        darkColorScheme(
+            background = tokens.ground, surface = tokens.glass, primary = tokens.accent, secondary = tokens.accentAlt,
+            onBackground = tokens.text, onSurface = tokens.text, onSurfaceVariant = tokens.muted, error = tokens.error,
+            outline = tokens.border,
+        )
+    }
     CompositionLocalProvider(LocalTokens provides tokens, LocalMotionPolicy provides policy) {
-        MaterialTheme(colorScheme = colors, typography = typography, content = content)
+        MaterialTheme(colorScheme = colors, typography = GhostdeckTypography, content = content)
     }
 }
 

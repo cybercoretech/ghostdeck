@@ -21,6 +21,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -38,6 +40,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -45,6 +48,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -79,6 +83,9 @@ private const val STAGGER_MS = 20L
 private const val STAGGER_CAP_MS = 200L
 private const val UNAVAILABLE_ALPHA = 0.4f
 private const val DRAGGING_ALPHA = 0.25f
+private val BADGE_DOT_SIZE = 8.dp
+private val BADGE_DOT_TOP = 4.dp
+private val BADGE_DOT_END = 8.dp
 
 /** What every tile needs from the home screen. */
 data class TileEnv(
@@ -101,6 +108,10 @@ data class TileEnv(
     val layer: Int = 0,
     /** The item being dragged is drawn faint where it came from. */
     val draggingId: String? = null,
+    /** Ids of tiles that have already materialized once; a revisited page shows them at once. */
+    val shownTiles: MutableSet<String> = HashSet(),
+    /** Test hook: told each time a tile composes. */
+    val onTileComposed: ((String) -> Unit)? = null,
 )
 
 /** Colour of the soft dark halo behind light home text and dots, so they read on any wallpaper (as Launcher3 does). */
@@ -147,6 +158,7 @@ fun TileEnv.visibleChildren(folder: FolderItem): List<Item> = folder.children.fi
 /** One home, dock or folder item: icon, label, tap, swipe-up action. [index] staggers the first appearance. */
 @Composable
 fun ItemTile(item: Item, env: TileEnv, iconSize: Dp, showLabel: Boolean, index: Int, modifier: Modifier = Modifier) {
+    env.onTileComposed?.let { hook -> SideEffect { hook(item.id) } }
     // Hidden items keep their cell (nothing is placed over them) but draw nothing and take no input or semantics.
     if (env.stateOf(item) == TileState.Hidden) {
         Box(modifier)
@@ -172,6 +184,7 @@ private fun ItemTileContent(item: Item, env: TileEnv, iconSize: Dp, showLabel: B
             val label = item.customLabel ?: entry?.label ?: item.app.packageName.substringAfterLast('.')
             AppIcon(
                 id = item.id, label = label, available = available, showLabel = showLabel, index = index, modifier = modifier,
+                announce = env.profiles[item.app.userSerial]?.spoken(), alreadyShown = item.id in env.shownTiles, onShown = { env.shownTiles += item.id },
                 swipeUp = item.swipeUp, showSwipeMark = env.swipeMarks,
                 badge = env.badges.hasCount(item.app.packageName, item.app.userSerial),
                 onTap = { env.launcher.launch(item.app, it) },
@@ -184,6 +197,7 @@ private fun ItemTileContent(item: Item, env: TileEnv, iconSize: Dp, showLabel: B
             AppIcon(
                 id = item.id, label = item.label, available = env.stateOf(item) == TileState.Normal,
                 showLabel = showLabel, index = index, modifier = modifier,
+                announce = env.profiles[item.userSerial]?.spoken(), alreadyShown = item.id in env.shownTiles, onShown = { env.shownTiles += item.id },
                 swipeUp = item.swipeUp, showSwipeMark = env.swipeMarks,
                 badge = env.badges.hasCount(item.packageName, item.userSerial),
                 onTap = { env.launcher.launchShortcut(item, it) },
@@ -193,6 +207,8 @@ private fun ItemTileContent(item: Item, env: TileEnv, iconSize: Dp, showLabel: B
         }
         is FolderItem -> AppIcon(
             id = item.id, label = item.name, available = true, showLabel = showLabel, index = index, modifier = modifier,
+            announce = env.visibleChildren(item).size.let { n -> "folder, $n ${if (n == 1) "item" else "items"}" },
+            alreadyShown = item.id in env.shownTiles, onShown = { env.shownTiles += item.id },
             swipeUp = null, showSwipeMark = false,
             badge = env.visibleChildren(item).any {
                 when (it) {
@@ -205,6 +221,13 @@ private fun ItemTileContent(item: Item, env: TileEnv, iconSize: Dp, showLabel: B
             icon = { FolderGlyph(item, iconSize, env) },
         )
     }
+}
+
+/** What a screen reader adds after the label for an app of this profile. Personal apps add nothing. */
+private fun ProfileKind.spoken(): String? = when (this) {
+    ProfileKind.WORK -> "work"
+    ProfileKind.PRIVATE -> "private"
+    else -> null
 }
 
 private fun Map<String, Int>.hasCount(packageName: String, userSerial: Long) =
@@ -234,19 +257,28 @@ fun AppIcon(
     onTap: (android.graphics.Rect?) -> Unit,
     onSwipeUp: (android.graphics.Rect?) -> Unit,
     modifier: Modifier = Modifier,
+    /** Spoken after the label, e.g. "work" or "folder, 3 items". */
+    announce: String? = null,
+    /** True when this tile has already materialized once (its page is being revisited). */
+    alreadyShown: Boolean = false,
+    onShown: () -> Unit = {},
     icon: @Composable () -> Unit,
 ) {
     val tokens = LocalTokens.current
     val reduceMotion = LocalMotionPolicy.current.reduceMotion
-    var shown by remember { mutableStateOf(reduceMotion) }
+    var shown by remember { mutableStateOf(reduceMotion || alreadyShown) }
     LaunchedEffect(Unit) {
         if (!shown) delay((index * STAGGER_MS).coerceAtMost(STAGGER_CAP_MS))
         shown = true
+        onShown()
     }
-    var bounds by remember { mutableStateOf<android.graphics.Rect?>(null) }
+    // The coordinates are kept as a plain reference and turned into a Rect only when a tap or swipe needs it:
+    // no allocation and no state write per tile per scroll frame.
+    val coords = remember { CoordsHolder() }
     val thresholdPx = with(LocalDensity.current) { SWIPE_UP_DP.dp.toPx() }
+    val latestSwipeUp by rememberUpdatedState(onSwipeUp)
     val swipeModifier = if (swipeUp != null && available) {
-        Modifier.pointerInput(swipeUp) {
+        Modifier.pointerInput(thresholdPx) {
             // Claims the gesture only once it has moved up by the touch slop; a downward or sideways
             // drag is left alone so the page (shade, pager) gets it.
             awaitEachGesture {
@@ -261,22 +293,26 @@ fun AppIcon(
                     if (!claimed && total <= -viewConfiguration.touchSlop) claimed = true
                     if (claimed) change.consume()
                 }
-                if (total <= -thresholdPx) onSwipeUp(bounds)
+                if (total <= -thresholdPx) latestSwipeUp(coords.windowRect())
             }
         }
     } else Modifier
     Box(
         modifier
             .testTag("item-$id")
-            .materialize(visible = shown, reduceMotion = reduceMotion)
+            .materialize(visible = shown, reduceMotion = reduceMotion || alreadyShown)
             .alpha(if (available) 1f else UNAVAILABLE_ALPHA)
-            .onGloballyPositioned { c -> c.boundsInWindow().let { bounds = android.graphics.Rect(it.left.toInt(), it.top.toInt(), it.right.toInt(), it.bottom.toInt()) } }
-            // TalkBack hears the label, plus "has notifications" when the dot is showing.
+            .onGloballyPositioned { coords.layout = it }
+            // TalkBack hears the label, then the profile or folder note (as the node's state), and
+            // "has notifications" when the dot is showing.
             .then(
-                if (showLabel && !badge) Modifier
-                else Modifier.semantics { contentDescription = if (badge) "$label, has notifications" else label },
+                if (showLabel && !badge && announce == null) Modifier
+                else Modifier.semantics {
+                    if (badge || !showLabel) contentDescription = if (badge) "$label, has notifications" else label
+                    if (announce != null) stateDescription = announce
+                },
             )
-            .clickable(enabled = available) { onTap(bounds) }
+            .clickable(enabled = available) { onTap(coords.windowRect()) }
             .then(swipeModifier),
     ) {
         Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
@@ -296,7 +332,10 @@ fun AppIcon(
         }
         // A dot, never a number: counts would be one more thing competing for attention.
         if (badge) {
-            Box(Modifier.align(Alignment.TopEnd).padding(top = 4.dp, end = 8.dp).testTag("badge-$id").size(8.dp).background(tokens.accent, CircleShape))
+            Box(
+                Modifier.align(Alignment.TopEnd).padding(top = BADGE_DOT_TOP, end = BADGE_DOT_END)
+                    .testTag("badge-$id").size(BADGE_DOT_SIZE).background(tokens.accent, CircleShape),
+            )
         }
         // Overlaid at the bottom edge so it never competes with the label for height.
         if (swipeUp != null && showSwipeMark) {
@@ -305,12 +344,23 @@ fun AppIcon(
     }
 }
 
+private class CoordsHolder {
+    var layout: LayoutCoordinates? = null
+
+    fun windowRect(): android.graphics.Rect? =
+        layout?.takeIf { it.isAttached }?.boundsInWindow()?.let {
+            android.graphics.Rect(it.left.toInt(), it.top.toInt(), it.right.toInt(), it.bottom.toInt())
+        }
+}
+
 @Composable
 fun AppImage(key: AppKey, size: Dp, icons: IconProvider) {
     val px = with(LocalDensity.current) { size.roundToPx() }
     // A new generation (package updated, profile unlocked) re-requests; the old bitmap stays until the new one lands.
     val generation by icons.generation.collectAsState()
-    val bitmap by produceState<ImageBitmap?>(null, key, px, generation) {
+    // Monochrome fallback icons are tinted with the accent, so an accent change must request them again.
+    val accent = LocalTokens.current.accent
+    val bitmap by produceState<ImageBitmap?>(null, key, px, generation, accent) {
         value = withContext(Dispatchers.Default) { icons.icon(key, px) }
     }
     Box(Modifier.size(size)) {
