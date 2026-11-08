@@ -6,13 +6,15 @@ import net.cybercoretech.ghostdeck.model.remapApp
 import net.cybercoretech.ghostdeck.model.removeApp
 
 /**
- * Keeps the saved layout in step with a catalog event. Only package removal edits the layout;
- * a locked profile keeps its items so they reappear on unlock.
+ * Keeps the saved layout in step with a catalog event. Only package removal edits the layout (placed
+ * items and hidden keys of that package and profile); a locked profile keeps its items so they
+ * reappear on unlock. [state] is reserved for event kinds that need the catalog.
  */
 fun Layout.reconcile(event: CatalogEvent, state: CatalogState): Layout = when (event) {
     is CatalogEvent.PackageRemoved -> allAppKeys()
         .filter { it.userSerial == event.userSerial && it.packageName == event.packageName }
         .fold(this) { layout, key -> layout.removeApp(key) }
+        .let { l -> l.copy(hidden = l.hidden.filterNot { it.userSerial == event.userSerial && it.packageName == event.packageName }.toSet()) }
     else -> this
 }
 

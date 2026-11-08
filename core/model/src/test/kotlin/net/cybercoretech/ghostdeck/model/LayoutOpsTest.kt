@@ -17,6 +17,30 @@ class LayoutOpsTest {
     private fun cellOf(l: Layout, id: String): Cell? =
         l.pages.flatMap { it.placed }.firstOrNull { it.item.id == id }?.cell
 
+    private fun Cell.overlapsCell(o: Cell) =
+        x < o.x + o.spanX && o.x < x + spanX && y < o.y + o.spanY && o.y < y + spanY
+
+    private fun assertNoOverlaps(l: Layout) = l.pages.forEachIndexed { pi, page ->
+        val cells = page.placed.map { it.cell }
+        for (i in cells.indices) for (j in i + 1 until cells.size) {
+            assertTrue("page $pi: ${cells[i]} overlaps ${cells[j]}", !cells[i].overlapsCell(cells[j]))
+        }
+    }
+
+    @Test fun placeRejectsDuplicateId() {
+        val l = ok(Layout().place(app("a"), 0, cell(0, 0)))
+        val dup = AppItem("a", key("other"))
+        assertEquals(Err(InvalidTarget), l.place(dup, 0, cell(3, 3)))
+        assertEquals(1, l.pages.sumOf { it.placed.size })
+    }
+
+    @Test fun placeRejectsDuplicateIdOfFolderChildAndDockItem() {
+        var l = ok(Layout().place(FolderItem("f", "F", listOf(app("c1"), app("c2"))), 0, cell(0, 0)))
+        assertEquals(Err(InvalidTarget), l.place(app("c1"), 0, cell(3, 3)))
+        l = l.copy(dock = Dock(listOf(app("d0"), null)))
+        assertEquals(Err(InvalidTarget), l.place(app("d0"), 0, cell(3, 3)))
+    }
+
     @Test fun placeRejectsOutOfBounds() { assertEquals(Err(OutOfBounds), Layout().place(app("a"), 0, cell(5, 0))) }
     @Test fun halfStepAtRightEdgeOutOfBounds() { assertEquals(Err(OutOfBounds), Layout().place(app("a"), 0, Cell(9, 0))) }
     @Test fun placeRejectsOccupied() {
@@ -47,6 +71,30 @@ class LayoutOpsTest {
         assertTrue(b.isWholeAligned)
         assertTrue(b.x + b.spanX <= 8 && b.y + b.spanY <= 10)
         assertEquals(setOf(key("a"), key("b")), r.allAppKeys())
+        assertNoOverlaps(r)
+    }
+
+    @Test fun resizeClampsSpanToNewGrid() {
+        val wide = AppItem("w", key("w"))
+        val l = ok(Layout().place(wide, 0, Cell(0, 0, 8, 2)))
+        val r = l.resize(GridSize(3, 6))
+        val c = cellOf(r, "w")!!
+        assertEquals(6, c.spanX)
+        assertTrue(c.x >= 0 && c.x + c.spanX <= 6 && c.y + c.spanY <= 12)
+        assertEquals(setOf(key("w")), r.allAppKeys())
+        assertNoOverlaps(r)
+    }
+
+    @Test fun resizeAppendsPageWhenNoFreeCell() {
+        var l = Layout()
+        for (r in 0 until 4) for (c in 0 until 3) l = ok(l.place(app("a$r$c"), 0, cell(c, r)))
+        l = ok(l.place(app("far"), 0, cell(4, 0)))
+        val before = l.pages.size
+        val out = l.resize(GridSize(3, 4))
+        assertEquals(before + 1, out.pages.size)
+        assertEquals(1, out.pages.last().placed.size)
+        assertEquals(13, out.allAppKeys().size)
+        assertNoOverlaps(out)
     }
 
     @Test fun resizeReflowsOverflowWithoutLoss() {
@@ -59,6 +107,7 @@ class LayoutOpsTest {
         out.pages.flatMap { it.placed }.forEach {
             assertTrue(it.cell.x + it.cell.spanX <= 8 && it.cell.y + it.cell.spanY <= 10)
         }
+        assertNoOverlaps(out)
     }
 
     @Test fun swipeUpOnlyForAppsAndShortcuts() {
@@ -222,5 +271,20 @@ class LayoutOpsTest {
     @Test fun resizeDockClampsToSpecRange() {
         assertEquals(0, Layout().resizeDock(-3).dock.items.size)
         assertEquals(6, Layout().resizeDock(99).dock.items.size)
+    }
+
+    @Test fun remapToAlreadyPlacedKeyDropsStale() {
+        var l = ok(Layout().place(AppItem("s", key("old")), 0, cell(0, 0)))
+        l = ok(l.place(AppItem("n", key("new")), 0, cell(2, 0)))
+        val r = l.remapApp(key("old"), key("new"))
+        val items = r.pages.flatMap { it.placed }.map { it.item }
+        assertEquals(1, items.size)
+        assertEquals(key("new"), (items.single() as AppItem).app)
+        assertEquals(setOf(key("new")), r.allAppKeys())
+    }
+
+    @Test fun remapToAlreadyPlacedKeyFoldsHidden() {
+        val l = ok(Layout().place(AppItem("n", key("new")), 0, cell(0, 0))).copy(hidden = setOf(key("old"), key("new")))
+        assertEquals(setOf(key("new")), l.remapApp(key("old"), key("new")).hidden)
     }
 }

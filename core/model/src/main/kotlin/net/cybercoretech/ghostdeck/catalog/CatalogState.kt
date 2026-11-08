@@ -3,6 +3,8 @@ package net.cybercoretech.ghostdeck.catalog
 import kotlinx.coroutines.flow.Flow
 import net.cybercoretech.ghostdeck.model.AppKey
 import java.text.Collator
+import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 
 sealed interface CatalogEvent {
     data class Snapshot(val userSerial: Long, val profile: ProfileKind, val entries: List<AppEntry>) : CatalogEvent
@@ -40,14 +42,20 @@ data class CatalogState(
         )
     }
 
-    /** Apps of available profiles, sorted by label ignoring case and accents. */
-    fun visibleApps(): List<AppEntry> {
-        val collator = Collator.getInstance().apply { strength = Collator.SECONDARY }
+    /** Apps of available profiles, sorted by label ignoring case, in the order of [locale]. */
+    fun visibleApps(locale: Locale = Locale.getDefault()): List<AppEntry> {
+        val collator = collatorFor(locale)
         return entries.values
             .filter { it.key.userSerial !in unavailableUsers }
             .sortedWith { a, b -> collator.compare(a.label, b.label) }
     }
 }
+
+// Collators are costly to build and Collator.compare is thread-safe, so keep one per locale.
+private val collators = ConcurrentHashMap<Locale, Collator>()
+
+private fun collatorFor(locale: Locale): Collator =
+    collators.getOrPut(locale) { Collator.getInstance(locale).apply { strength = Collator.SECONDARY } }
 
 private fun Map<AppKey, AppEntry>.withoutPackage(userSerial: Long, packageName: String): Map<AppKey, AppEntry> =
     filterKeys { !(it.userSerial == userSerial && it.packageName == packageName) }

@@ -40,8 +40,6 @@ class ConfigSerializationTest {
         val root = Json.parseToJsonElement(text).jsonObject
         assertEquals("1", root["schema"]!!.jsonPrimitive.content)
         assertTrue(types(text).containsAll(setOf("app", "shortcut", "folder", "launchApp", "launchShortcut", "shortcutList")))
-        assertTrue("folder" in types(text))
-        assertTrue("launchApp" in types(text))
     }
 
     @Test fun ignoresUnknownKeys() {

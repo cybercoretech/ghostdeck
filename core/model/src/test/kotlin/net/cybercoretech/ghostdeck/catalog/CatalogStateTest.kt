@@ -8,8 +8,8 @@ import net.cybercoretech.ghostdeck.model.LayoutResult
 import net.cybercoretech.ghostdeck.model.allAppKeys
 import net.cybercoretech.ghostdeck.model.place
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.Locale
 
 class CatalogStateTest {
     private fun entry(pkg: String, cls: String, label: String, user: Long = 0, kind: ProfileKind = ProfileKind.PERSONAL) =
@@ -104,7 +104,7 @@ class CatalogStateTest {
             .reduce(snapshot(10, ProfileKind.WORK, entry("p", "New", "P", 10, ProfileKind.WORK)))
             .reduce(CatalogEvent.ProfileAvailability(10, false))
         val layout = layoutWith(AppKey("p", "Old", 10))
-        assertTrue(layout == layout.resolveStale(state))
+        assertEquals(layout, layout.resolveStale(state))
     }
 
     @Test fun packagesUnavailableHidesEntriesButKeepsLayoutItems() {
@@ -124,5 +124,32 @@ class CatalogStateTest {
             .reduce(CatalogEvent.PackagesUnavailable(0, listOf("p")))
         val layout = layoutWith(AppKey("p", "A", 0))
         assertEquals(layout, layout.resolveStale(state))
+    }
+
+    @Test fun visibleAppsSortUsesGivenLocale() {
+        val s = CatalogState().reduce(
+            snapshot(0, ProfileKind.PERSONAL, entry("a", "A", "Ärlig"), entry("z", "Z", "Zebra")),
+        )
+        assertEquals(listOf("Ärlig", "Zebra"), s.visibleApps(Locale.ENGLISH).map { it.label })
+        assertEquals(listOf("Zebra", "Ärlig"), s.visibleApps(Locale("sv")).map { it.label })
+    }
+
+    @Test fun packageRemovedAlsoClearsHiddenKeys() {
+        val a = AppKey("p", "A", 0)
+        val otherProfile = AppKey("p", "A", 10)
+        val keep = AppKey("q", "Q", 0)
+        val layout = layoutWith(keep).copy(hidden = setOf(a, otherProfile, keep))
+        val event = CatalogEvent.PackageRemoved(0, "p")
+        val out = layout.reconcile(event, CatalogState().reduce(event))
+        assertEquals(setOf(otherProfile, keep), out.hidden)
+    }
+
+    @Test fun resolveStaleNeverCreatesDuplicateKeys() {
+        val state = CatalogState().reduce(snapshot(0, ProfileKind.PERSONAL, entry("p", "New", "P")))
+        // The replacement is already placed, and two stale keys of the package also exist.
+        val layout = layoutWith(AppKey("p", "New", 0), AppKey("p", "Old1", 0), AppKey("p", "Old2", 0))
+        val out = layout.resolveStale(state)
+        val placed = out.pages.flatMap { it.placed }.map { it.item }.filterIsInstance<AppItem>().map { it.app }
+        assertEquals(listOf(AppKey("p", "New", 0)), placed)
     }
 }

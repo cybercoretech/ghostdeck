@@ -110,6 +110,7 @@ fun Layout.firstFreeCell(spanX: Int = SUB, spanY: Int = SUB): Pair<Int, Cell> {
 // ---- mutations ------------------------------------------------------------
 
 fun Layout.place(item: Item, page: Int, cell: Cell): LayoutResult {
+    if (findItem(item.id) != null) return LayoutResult.Err(LayoutError.InvalidTarget)
     if (page < 0 || page > pages.size) return LayoutResult.Err(LayoutError.OutOfBounds)
     if (!grid.contains(cell)) return LayoutResult.Err(LayoutError.OutOfBounds)
     val existing = if (page == pages.size) emptyList() else pages[page].placed
@@ -229,9 +230,16 @@ fun Layout.setSwipeUp(itemId: String, action: ItemAction?): LayoutResult {
     )
 }
 
-fun Layout.remapApp(stale: AppKey, replacement: AppKey): Layout =
-    mapItems { if (it is AppItem && it.app == stale) it.copy(app = replacement) else it }
-        .let { l -> if (stale in l.hidden) l.copy(hidden = l.hidden - stale + replacement) else l }
+/**
+ * Points items of [stale] at [replacement]. If [replacement] is already placed, the stale item is dropped
+ * instead, so one app never appears twice. The hidden set is folded the same way.
+ */
+fun Layout.remapApp(stale: AppKey, replacement: AppKey): Layout {
+    val renamed =
+        if (replacement in allAppKeys()) removeApp(stale)
+        else mapItems { if (it is AppItem && it.app == stale) it.copy(app = replacement) else it }
+    return if (stale in renamed.hidden) renamed.copy(hidden = renamed.hidden - stale + replacement) else renamed
+}
 
 fun Layout.dropEmptyTrailingPages(): Layout {
     var end = pages.size

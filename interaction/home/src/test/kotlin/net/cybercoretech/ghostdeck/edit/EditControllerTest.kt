@@ -183,18 +183,33 @@ class EditControllerTest {
         assertEquals(Cell(5, 3), out.pages[0].placed.single { it.item.id == "a" }.cell)
     }
 
+    @Test fun fineDropOverlappingNeighbourIsRejectedOccupied() {
+        val c = EditController(base)
+        c.fine = true
+        c.startDrag(DragSource.New(app("n")))
+        assertFalse(c.hover(DropZone.OnTarget(Target.Grid(0, Cell(1, 0)))))
+        assertEquals(DropOutcome.Rejected(LayoutError.Occupied), c.drop())
+        assertEquals(base, c.layout)
+    }
+
     @Test fun dockAndFolderIgnoreFine() {
         val folder = FolderItem("f", "F", listOf(app("x"), app("y")))
         val layout = base.copy(pages = listOf(Page(base.pages[0].placed + Placed(folder, cell(2, 0)))))
-        for (fine in listOf(false, true)) {
+        // The same two drops, once whole and once fine: the outcomes must be identical.
+        val results = listOf(false, true).map { fine ->
             val c = EditController(layout)
             c.fine = fine
             c.startDrag(DragSource.Existing("a"))
-            assertEquals("a", c.layoutAfter(c.dropOn(DropZone.OnTarget(Target.DockSlot(1)))).dock.items[1]?.id)
+            val docked = c.dropOn(DropZone.OnTarget(Target.DockSlot(1)))
             c.startDrag(DragSource.Existing("b"))
-            assertTrue(c.hover(DropZone.OnTarget(Target.IntoFolder("f"))))
-            assertEquals(3, (c.layoutAfter(c.drop()).findItem("f") as FolderItem).children.size)
+            val hovered = c.hover(DropZone.OnTarget(Target.IntoFolder("f")))
+            Triple(docked, hovered, c.drop())
         }
+        assertEquals(results[0], results[1])
+        val (docked, hovered, folded) = results[1]
+        assertEquals("a", (docked as DropOutcome.Updated).layout.dock.items[1]?.id)
+        assertTrue(hovered)
+        assertEquals(3, ((folded as DropOutcome.Updated).layout.findItem("f") as FolderItem).children.size)
     }
 
     @Test fun placeFirstFreeUsesNextEmptyCell() {
