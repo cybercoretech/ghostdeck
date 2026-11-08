@@ -1,0 +1,2 @@
+com.example.(broken
+com.google.firebase.analytics

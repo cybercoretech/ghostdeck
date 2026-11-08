@@ -11,7 +11,7 @@ json="$(curl -fsSL -A "ghostdeck-update-trackers" "$url")"
     echo "# Source: Exodus Privacy tracker signatures, $url"
     echo "# Snapshot: $(date -u +%Y-%m-%d). Regenerate with tools/update-trackers.sh."
     printf '%s' "$json" | python3 -c '
-import json, sys
+import json, re, sys
 data = json.load(sys.stdin)["trackers"]
 sigs = set()
 for t in data.values():
@@ -19,6 +19,11 @@ for t in data.values():
         sig = sig.replace("\\", "").strip().strip(".")
         if sig and "." in sig:
             sigs.add(sig)
+# privacy-gate.sh turns each line into a regex, so only plain package or
+# class names are allowed. Anything else is a regex signature the gate cannot use.
+bad = sorted(s for s in sigs if not re.fullmatch(r"[A-Za-z0-9_.-]+", s))
+if bad:
+    sys.exit("update-trackers: unusable signatures (not plain names): " + ", ".join(bad))
 print("\n".join(sorted(sigs)))
 '
 } > "$out.tmp"
