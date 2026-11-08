@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ghostdeck mark: a ghost silhouette in the default pack's violet (accent_hot #a78bfa). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#A78BFA"
+        android:pathData="M54,32c-11,0 -19,8 -19,19v25l6,-5 6,5 7,-5 7,5 6,-5 6,5V51c0,-11 -8,-19 -19,-19z" />
+    <path android:fillColor="#07060D"
+        android:pathData="M46,50m-3.5,0a3.5,3.5 0,1 1,7 0a3.5,3.5 0,1 1,-7 0M62,50m-3.5,0a3.5,3.5 0,1 1,7 0a3.5,3.5 0,1 1,-7 0" />
+</vector>
