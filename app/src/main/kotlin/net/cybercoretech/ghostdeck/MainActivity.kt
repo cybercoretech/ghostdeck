@@ -10,7 +10,21 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Text
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.padding
+import androidx.compose.runtime.remember
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import net.cybercoretech.ghostdeck.ui.theme.AmbientOrbs
+import net.cybercoretech.ghostdeck.ui.theme.DEFAULT_PACK_ID
+import net.cybercoretech.ghostdeck.ui.theme.GhostdeckFonts
+import net.cybercoretech.ghostdeck.ui.theme.GhostdeckTheme
+import net.cybercoretech.ghostdeck.ui.theme.GlassSurface
+import net.cybercoretech.ghostdeck.ui.theme.LocalMotionPolicy
+import net.cybercoretech.ghostdeck.ui.theme.LocalTokens
+import net.cybercoretech.ghostdeck.ui.theme.ThemeRepository
+import net.cybercoretech.ghostdeck.ui.theme.materialize
 import androidx.lifecycle.Lifecycle
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -28,8 +42,25 @@ class MainActivity : ComponentActivity() {
             override fun handleOnBackPressed() = Unit
         })
         setContent {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("Ghostdeck", color = Color.White)
+            val pack = remember { ThemeRepository(applicationContext).load(DEFAULT_PACK_ID) }
+            GhostdeckTheme(pack) {
+                val tokens = LocalTokens.current
+                Box(Modifier.fillMaxSize().background(tokens.ground)) {
+                    AmbientOrbs(Modifier.fillMaxSize())
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        val policy = LocalMotionPolicy.current
+                        GlassSurface(Modifier.materialize(visible = true, reduceMotion = policy.reduceMotion)) {
+                            Text(
+                                "Ghostdeck",
+                                modifier = Modifier.padding(horizontal = 32.dp, vertical = 20.dp),
+                                color = tokens.text,
+                                fontFamily = GhostdeckFonts.display,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 28.sp,
+                            )
+                        }
+                    }
+                }
             }
         }
     }
